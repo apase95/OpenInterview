@@ -4,6 +4,8 @@
 
 Không ấn định lịch hoặc giá khi chưa có số liệu. Mỗi giai đoạn chỉ qua cổng khi có artifact và người chịu trách nhiệm duyệt.
 
+Active MVP desktop only, đúng [7 trang](../product/README.md): Home, Sign in, Roles, Join room, Interview, HR, Admin; một frame 1440/page type. Mobile/tablet/responsive OUT OF SCOPE. Không candidate profile/CV upload/change/share/version/history/settings portal; machine-derived profile artifact không là portal. Recording/export future OUT OF SCOPE, không controls/capture trong MVP. Chỉ kiểm tra desktop browsers; kiểm chứng tài liệu không chứng minh app đã chạy.
+
 | Giai đoạn | Artifact | Điều kiện qua cổng |
 | --- | --- | --- |
 | 1. Mô phỏng text | Campaign mẫu, câu hỏi/rubric được duyệt, FAQ versioned, transcript giả lập và báo cáo | Tất cả case policy bắt buộc bên dưới pass; controller chặn vượt hạn mức; mọi nhận định có evidence hoặc trạng thái thiếu; không ra quyết định tuyển |
@@ -20,7 +22,7 @@ Không ấn định lịch hoặc giá khi chưa có số liệu. Mỗi giai đo
 | Tên, số năm, “không/chưa” bị nhận sai | Xác nhận hoặc sửa có provenance; không chấm dựa trên partial/sai đã được sửa |
 | FAQ known | Đáp án chỉ có thông tin được nguồn hợp lệ hỗ trợ; source IDs/version ở dashboard |
 | FAQ unknown/conflict/expired | Không bịa/hứa; nói chưa xác nhận và tạo followup tương ứng |
-| Từ chối consent hoặc ghi âm | Từ chối phỏng vấn thì dừng; từ chối audio recording vẫn dùng được phiên với transcript nếu đã consent phần đó |
+| Từ chối consent phiên | Không thu media/turn; notice/policy thật readable inline/dialog trong Join room trước consent; browser permission không thay consent |
 | Skip, từ chối tuổi, sửa thông tin | Phân biệt refused/not_collected/insufficient_evidence; không chấm tuổi, không tự điền |
 | Followup và clarification liên tiếp | Controller chặn vượt từng loại hạn mức; giữ cùng rubric; deadline đưa về wrap |
 | Nói chen và kết thúc sớm | Audio chờ bị hủy; không phát output cũ; chỉ lưu phần đã phát; dừng được ở mọi pha |
@@ -28,7 +30,14 @@ Không ấn định lịch hoặc giá khi chưa có số liệu. Mỗi giai đo
 | Mic denied, mạng yếu, disconnect, provider timeout/quota | Hướng dẫn rõ, retry hữu hạn; trạng thái interrupted/ended chính xác, không nhân đôi phiên |
 | Worker chết khi tạo report; job được xử lý hai lần | Lease hết hạn được nhận lại; unique key ngăn kết quả trùng; report không hoàn tất nửa chừng |
 | Token hết hạn, truy cập chéo chiến dịch | Từ chối quyền; refresh chỉ sau kiểm tra phiên; không credential trong browser/log |
-| Retention và xóa | Transcript/report/audio opt-in bị xử lý đúng thời hạn, quyền và quy trình backup đã công bố |
+| Retention và xóa | Transcript/report/room CV kể cả trước session và quarantine/rejected/orphan/copies/objects/backups theo policy; scan/report/retry jobs và restore không tái publish tombstone |
+| 7 trang và Home blue-box-only | Đúng 7 desktop frames 1440, callback là transition, errors/consent/waiting inline, HR tabs cùng workspace; Home chỉ navbar logo/Roles/Sign in, hero hai CTA và một Example robot preview, không sections/footer/removed links |
+| Interview stage + đúng 3 controls | Mic mute/unmute, speaker mute/unmute, End interview; essential English status/error trong stage, không navbar/header/timer/volume/device selector/captions/extra controls; backend deadline/delivery/connection vẫn hoạt động |
+| End khi speaking/loading/reconnect/error/offline | Stop local mic/playback/cancel output ngay, không confirm/forced wrap; terminal/report job idempotent, Roles inline “Interview ended”; reconcile không resume audio, không hứa xóa |
+| Optional room CV happy path | HR authority/lawful basis/notice trước upload (không consent candidate hồi tố); server correct candidate/room + bounded PDF 5 MB configurable proposal + quarantine/scan pass → publish locks identity/campaign/CV ID/version/hash; assigned HR URL được phép; absence “No CV attached” vẫn join được |
+| CV critical edges | Wrong identity, MIME/signature/size, malware/scan failed/unavailable chặn publish room chứa file; không client-only check. Draft correction được; sau publish/invite sai CV => revoke/cancel + NEW room, ongoing/source history không swap, kể cả từ absence sang file |
+| CV privacy/evidence | Private store provisioned trước upload; fresh auth URLs assigned HR/worker khi cần, candidate/Admin không default content access. Không candidate upload/manage/download; mismatch qua HR contact inline. CV chỉ unverified HR reference, không parse/score/prompt/candidate-turn evidence |
+| Desktop accessibility/language | Keyboard/focus/contrast/zoom/reduced motion và dialog focus; mọi UI/generated summaries English, robot/source transcript/evidence Vietnamese không dịch đè; không language switch, không claims compliance chưa đo |
 
 Baseline nghiệm thu policy: không có vi phạm trong tập case đã duyệt; điều này không chứng minh hệ thống không bao giờ vi phạm. Lưu phiên bản test, cấu hình model/SDK, số mẫu, kết quả và lỗi còn mở. Với đánh giá voice, recruiter/người bản ngữ đối chiếu transcript và listening sample có consent riêng; ưu tiên audio synthetic.
 

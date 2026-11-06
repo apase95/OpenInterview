@@ -1,6 +1,6 @@
 # Kế hoạch MVP theo sprint
 
-Đây là kế hoạch đề xuất, chưa triển khai và chưa có kết quả nghiệm thu. **Toàn bộ task bên dưới: dự kiến, chưa hoàn thành.** Tài liệu bổ sung, không thay [checklist theo vai trò](implementation-checklist.md). Phạm vi theo [yêu cầu R01–R15](../business/requirements.md), [kiến trúc](../architecture/system-architecture.md), [hội thoại](../architecture/conversation-workflow.md), [I/O](../architecture/io-contracts.md), [artifact](../architecture/data-artifacts.md) và [báo cáo](../report/interview-report.md).
+Đây là kế hoạch đề xuất, chưa có kết quả nghiệm thu. **24 task chính chưa hoàn thành; các subcheckbox S1-01/S1-02/S1-04 chỉ ghi phần local đã kiểm tra.** Tài liệu bổ sung, không thay [checklist theo vai trò](implementation-checklist.md). Phạm vi theo [yêu cầu R01–R15](../business/requirements.md), [kiến trúc](../architecture/system-architecture.md), [hội thoại](../architecture/conversation-workflow.md), [I/O](../architecture/io-contracts.md), [artifact](../architecture/data-artifacts.md) và [báo cáo](../report/interview-report.md).
 
 ## Cách dùng và phụ thuộc
 
@@ -37,7 +37,7 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 - **Vai trò chính:** BA; phối hợp recruiter, AI Engineer, Fullstack Developer.
 - **Tiền đề:** yêu cầu R01–R15 và checklist hiện tại.
 - **Phạm vi:**
-  - Chốt đúng 7 trang/quyền; Home chỉ navbar/hero hai CTA/Example preview; Join room gộp consent/devices/waiting/errors; Interview chỉ stage + ba controls mic/speaker/End; HR 3 tabs, Admin grants/health/audit metadata inline. Policies/contacts readable inline/dialog, không extra frames.
+  - Chốt đúng 7 trang/quyền; Home chỉ navbar/hero hai CTA/static robot preview, không badge/Example chip/speaking/disclaimer; Join room gộp consent/devices/waiting/errors; Interview chỉ stage + ba controls mic/speaker/End; HR 3 tabs, Admin grants/health/audit metadata inline. Policies/contacts readable inline/dialog, không extra frames.
   - Chuẩn bị JD synthetic, mục tiêu sàng lọc, câu hỏi lõi, criterion IDs và rubric có ví dụ bằng chứng.
   - Chốt pha, time budget, followup và clarification riêng; quy trình duyệt/khóa và tạo version mới.
   - Chuẩn bị FAQ nhỏ có source/version, người duyệt và hiệu lực; mẫu báo cáo với bước người tuyển dụng duyệt.
@@ -85,6 +85,12 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 **Mục tiêu:** môi trường local có DB bền vững, secret đúng chỗ và cấu hình có thể tái lập.
 
 - [ ] **S1-01 — Khung web, API và worker**
+  - [x] Next.js TypeScript Home builds/typechecks and serves HTTP 200 in dotenv-free isolated workspace.
+  - [x] FastAPI `/health` independently serves `status: ok, service: api`; liveness only.
+  - [x] Long-running idle worker validates fake config and exits cleanly on SIGTERM; not a connected interview agent.
+  - [x] Server-only config: missing/placeholder names-only errors, hidden credential repr and FAKE marker absent from public static bundle/rendered Home.
+  - [x] Tailwind v4/PostCSS utilities compiled; 56 px navbar/30 px logo/compact Sign in; preserve trimmed Home.
+  - Evidence: `python -m unittest discover -s tests -p test_backend.py`, `python tests/verify_local.py` (includes `npm run build`, `npm run typecheck`, independent HTTP checks); see README for isolated setup. PostgreSQL 16.11 is pinned/tested locally; broader version agreement and S0-03 approval remain open. Provider gates unchanged.
 - **Vai trò chính:** Fullstack Developer; phối hợp AI Engineer, DevOps.
 - **Tiền đề:** S0-03.
 - **Phạm vi:**
@@ -95,6 +101,9 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 - **Nghiệm thu:** web/API/worker khởi động độc lập bằng cấu hình mẫu phù hợp; thiếu env bắt buộc báo lỗi rõ; không provider key mang tiền tố NEXT_PUBLIC hoặc xuất hiện trong browser bundle/log.
 
 - [ ] **S1-02 — PostgreSQL và migration nguồn chuẩn**
+  - [x] Local PostgreSQL 16.11, separate admin/app credentials, app role without superuser/createdb/createrole; real authenticated SELECT 1.
+  - [x] Named volume: synthetic row survives postgres/API/worker restart and down/up without volume removal (`tests/verify_compose.py`).
+  - [ ] Domain schema migrations, constraints, seed/transaction/rollback verification; parent remains open.
 - **Vai trò chính:** Fullstack Developer; phối hợp DevOps, AI Engineer.
 - **Tiền đề:** S1-01, S0-03.
 - **Phạm vi:**
@@ -115,6 +124,10 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 - **Nghiệm thu:** từng provider trả đầu ra hợp lệ trên mẫu hoặc có blocker rõ chặn voice; hỗ trợ tiếng Việt/streaming không được suy từ tên model; credential không vào browser/commit/log.
 
 - [ ] **S1-04 — Container, readiness, CI và hướng dẫn local**
+  - [x] Explicit-path multi-stage COPY web/API/worker images, nonroot runtime; deny-by-default `.dockerignore`; runtime export and public sentinel checks.
+  - [x] Four-service Compose built/healthy, host loopback web/API only, authenticated DB readiness, worker idle heartbeat and clean SIGTERM stop.
+  - [x] Real synthetic persistence verification after restart and down/up; test-owned resources cleaned, README safe local commands.
+  - [ ] CI, migration checks, private CV object store/quarantine/scanner and provider integration; parent remains open.
 - **Vai trò chính:** DevOps; phối hợp Fullstack Developer, AI Engineer.
 - **Tiền đề:** S1-01, S1-02, S1-03.
 - **Phạm vi:**

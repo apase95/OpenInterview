@@ -1,6 +1,6 @@
 # Checklist triển khai MVP theo vai trò
 
-Đây là công việc dự kiến, chưa xác nhận đã triển khai. Mọi ô để trống cho đến khi có kết quả kiểm tra. Dùng cùng [yêu cầu sản phẩm](../business/requirements.md), [kiến trúc](../architecture/system-architecture.md), [luồng hội thoại](../architecture/conversation-workflow.md) và [kế hoạch kiểm chứng](validation-plan.md).
+Đây là công việc dự kiến; chỉ đánh dấu phần có kết quả kiểm tra. Skeleton local đã được kiểm tra trong phạm vi ghi bên dưới, không phải nghiệm thu MVP. Dùng cùng [yêu cầu sản phẩm](../business/requirements.md), [kiến trúc](../architecture/system-architecture.md), [luồng hội thoại](../architecture/conversation-workflow.md) và [kế hoạch kiểm chứng](validation-plan.md).
 
 Thứ tự chung: chốt nghiệp vụ và hợp đồng → dựng khung chạy local → kiểm tra luồng text → thêm voice → demo nội bộ. Các vai trò có thể làm song song sau khi chốt hợp đồng dữ liệu và API.
 
@@ -14,7 +14,7 @@ Phạm vi UI đúng [7 page types](../product/README.md): Home, Sign in, Roles, 
 - [ ] Chốt các pha, ngân sách thời gian, giới hạn followup và giới hạn làm rõ STT riêng.
 - [ ] Chuẩn bị FAQ từ nguồn nội bộ được phép dùng, có người duyệt và thời hạn hiệu lực.
 - [ ] Chốt quy trình recruiter duyệt JD, câu hỏi, rubric và FAQ; thay đổi tạo phiên bản mới, không sửa phiên bản đã khóa của phiên đang chạy.
-- [ ] Chốt 7 trang: Home chỉ navbar/hero hai CTA/Example preview; Join room gộp consent/mic/speaker/waiting/errors; Interview chỉ stage + đúng ba controls mic/speaker/End; HR Campaigns/Rooms/Reports tabs, Admin grants/health; policies/contacts inline/dialog trước consent, không trang/frame phụ.
+- [ ] Chốt 7 trang: Home chỉ navbar/hero hai CTA/static robot preview (không badge/Example chip/speaking/disclaimer); Join room gộp consent/mic/speaker/waiting/errors; Interview chỉ stage + đúng ba controls mic/speaker/End; HR Campaigns/Rooms/Reports tabs, Admin grants/health; policies/contacts inline/dialog trước consent, không trang/frame phụ.
 - [ ] Chốt trường cần thu và lý do; mặc định trường nhạy cảm là tùy chọn, không hỏi dữ liệu không cần thiết và không chấm điểm tuổi.
 - [ ] Soạn thông báo AI/mục đích/consent phiên-transcript-report và quyền dừng; HR authority/lawful basis/notice riêng trước CV upload, không dùng consent candidate về sau hồi tố; missing CV “No CV attached” không chặn.
 - [ ] Chốt thời hạn lưu, quyền xem, xóa và cách xử lý bản sao trong backup cho từng loại dữ liệu.
@@ -28,12 +28,14 @@ Phạm vi UI đúng [7 page types](../product/README.md): Home, Sign in, Roles, 
 - [ ] Chốt phiên bản Node.js, Python, PostgreSQL và cách quản lý phiên bản cùng Fullstack/AI Engineer.
 - [ ] Phối hợp tạo `.env.example` chỉ có giá trị mẫu và `.gitignore` loại secret; provider key chỉ ở server/worker, không dùng tiền tố `NEXT_PUBLIC`.
 - [ ] Tạo database và user PostgreSQL với quyền cần thiết; cấu hình volume bền vững và phối hợp Fullstack chạy migration.
+  - [x] Local PostgreSQL 16.11 provisioning: app role non-admin, authenticated TCP checks, named volume; synthetic row survives restart and down/up (`tests/verify_compose.py`).
+  - [ ] Application schema migrations and migration/rollback verification.
 - [ ] Tạo cấu hình LiveKit Cloud, credential và kết nối mạng cho API/worker/browser; không tự host media khi chưa có nhu cầu.
-- [ ] Viết Dockerfile cho web Next.js, API FastAPI và worker dài hạn; API/worker có thể dùng chung image Python nếu phù hợp.
-- [ ] Viết `.dockerignore` để không đưa secret, cache và file không cần thiết vào build context.
-- [ ] Viết `docker-compose.yml` cho web/api/worker/postgres với env, port, network và volume rõ ràng; LiveKit vẫn là dịch vụ Cloud.
-- [ ] Thêm healthcheck/readiness và xử lý chờ DB sẵn sàng; không coi container đã khởi động là ứng dụng đã sẵn sàng.
-- [ ] Ghi cách chạy local, rebuild, xem logs và down; không dùng xóa volume như thao tác dừng thông thường.
+- [x] Viết Dockerfile cho web Next.js, API FastAPI và worker dài hạn; explicit COPY, multi-stage, nonroot and runtime export checks passed locally.
+- [x] Viết `.dockerignore` để không đưa secret, cache và file không cần thiết vào build context; deny-by-default allowlist.
+- [x] Viết `docker-compose.yml` cho web/api/worker/postgres với env, loopback ports, network và named volume rõ ràng; LiveKit vẫn Cloud, chưa kết nối.
+- [x] Local health/readiness: authenticated DB SELECT 1, API `/ready`, web HTTP, worker idle PID heartbeat; API/worker wait for healthy DB. Not provider/job readiness.
+- [x] README startup/rebuild/private log/down guide; ordinary down preserves volume, destructive cleanup only for owned synthetic test.
 - [ ] Thiết lập CI chạy lint, build và check phù hợp; phối hợp kiểm tra migration trên database thử trước khi triển khai.
 - [ ] Cấu hình HTTPS/domain, CORS giới hạn origin và đường kết nối media; kiểm tra quyền mic trên browser mục tiêu.
 - [ ] Triển khai worker như tiến trình dài hạn, có restart và shutdown phù hợp; phối hợp kiểm tra phục hồi job với AI Engineer.
@@ -43,7 +45,11 @@ Phạm vi UI đúng [7 page types](../product/README.md): Home, Sign in, Roles, 
 
 ## Fullstack Developer
 
-- [ ] Khởi tạo Next.js với TypeScript và FastAPI; tạo cấu trúc tối thiểu cho web, API và mã dùng chung cần thiết.
+- [x] Khởi tạo Next.js với TypeScript và FastAPI; tạo cấu trúc tối thiểu cho web, API và mã dùng chung cần thiết. Verified by isolated production build/typecheck, Home HTTP and independent API HTTP (`tests/verify_local.py`).
+  - [x] Home desktop: Tailwind v4/PostCSS, 56 px navbar/30 px logo/compact Sign in, two hero CTAs and user-trimmed static robot preview; no badge/Example chip/speaking/disclaimer.
+  - [x] FastAPI `/health` liveness without provider credentials.
+  - [x] Idle worker startup, fake config check and SIGTERM shutdown (`tests/test_backend.py`); no LiveKit jobs yet.
+  - [x] Python-only credential validation and FAKE-secret public bundle/HTML scan; no real `.env` read during verification.
 - [ ] Nối cấu hình env và PostgreSQL; phối hợp DevOps về `.env.example`, kết nối local và migration.
 - [ ] Chốt API/Room/CVAttachment binding exact candidate + campaign + optional attachment ID/version/hash hoặc absence; server bounded PDF 5 MB configurable proposal, relationship/authority/scan validation; metadata guardrail không thêm FAQ status/action enum.
 - [ ] Tạo migration cho campaign/FAQ version, session, consent, turns, facts/corrections, candidate questions/FAQ answers, report jobs và reports; có ràng buộc chống trùng.

@@ -14,7 +14,7 @@ All visible website text, accessible names, errors, notices, emails, policies, s
 
 | Page | Route | Content and boundary |
 | --- | --- | --- |
-| Home | `/` | Compact logo / Roles / Sign in navbar; one hero and one Example robot preview only |
+| Home | `/` | Compact logo / Roles / Sign in navbar; one hero and one static robot preview only |
 | Sign in | `/login` | Continue with Google; readable account Terms/Privacy notice/dialog; no first-profile wizard |
 | Roles | `/roles` | One role card list with assigned rooms embedded; no separate history portal |
 | Join room | `/rooms/{id}` | Details, notice/consent, mic permission, speaker test, scheduled waiting and access errors on this same page |
@@ -26,7 +26,7 @@ Google callback is a system transition, not an eighth page/frame. One account/lo
 
 ### Home: stop after the blue box
 
-Badge “Voice interviews in Vietnamese”; title “Start with a conversation.”; short subtitle “AI leads a short interview. Recruiters review the evidence.” Exactly two hero CTAs: “View roles” and “I have an invitation”, both reaching assigned rooms in Roles after sign-in when needed, with safe return paths. No invitation-code management screen. One large dark-purple robot interview preview labelled “Example”. STOP after preview: no workflow, features, bento, FAQ, testimonials, pricing, bottom CTA, marketing footer or links to removed sections. Internal approved FAQ remains an answering source, not a Home section.
+Current trimmed Home is authoritative: 56 px navbar, 30 px logo and compact Sign in; title “Start with a conversation.”; short subtitle “AI leads a short interview. Recruiters review the evidence.” Exactly two hero CTAs: “View roles” and “I have an invitation”, both reaching assigned rooms in Roles after sign-in when needed, with safe return paths. No invitation-code management screen. One static dark-purple preview contains only “Voice interview”, the robot and “Interview language: Vietnamese”. Do not restore the hero badge, Example chip, AI-speaking/waveform or bottom disclaimer. STOP after preview: no workflow, features, bento, FAQ, testimonials, pricing, bottom CTA, marketing footer or links to removed sections. Internal approved FAQ remains an answering source, not a Home section.
 
 ### Sign in and Roles
 

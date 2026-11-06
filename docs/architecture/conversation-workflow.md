@@ -1,6 +1,6 @@
 # Điều phối hội thoại và streaming
 
-Xem [hợp đồng I/O](io-contracts.md) cho event, timeline và delivery; [artifact](data-artifacts.md) cho raw transcript, correction và recording tùy chọn.
+Xem [hợp đồng I/O](io-contracts.md) cho event, timeline/delivery; [artifact](data-artifacts.md) cho raw transcript, correction và room CV. Recording/export future OUT OF SCOPE, không controls active MVP. Desktop UI đúng [7 trang](../product/README.md); backend phases không là design pages.
 
 ## Trạng thái và giới hạn
 
@@ -14,16 +14,25 @@ stateDiagram-v2
     LightTechnical --> CandidateQA
     CandidateQA --> Wrap
     Wrap --> Ended
-    BasicInfo --> Wrap: hết giờ hoặc yêu cầu kết thúc
-    Experience --> Wrap: hết giờ hoặc yêu cầu kết thúc
-    LightTechnical --> Wrap: hết giờ hoặc yêu cầu kết thúc
-    CandidateQA --> Wrap: hết giờ hoặc yêu cầu kết thúc
+    BasicInfo --> Wrap: hết giờ
+    Experience --> Wrap: hết giờ
+    LightTechnical --> Wrap: hết giờ
+    CandidateQA --> Wrap: hết giờ
+    BasicInfo --> Ended: end ngay
+    Experience --> Ended: end ngay
+    LightTechnical --> Ended: end ngay
+    CandidateQA --> Ended: end ngay
+    Wrap --> Ended: end ngay
     Ended --> [*]
 ```
 
 Gián đoạn mạng/provider là trạng thái vận hành độc lập (`active`, `interrupted`, `ended`), không ép hội thoại chuyển pha giả. Candidate có thể yêu cầu dừng ở mọi pha; khi mất liên lạc, kết thúc với lý do nếu không thể wrap bằng giọng nói.
 
 State tối thiểu: session_id, campaign_version, phase, core_question_index, asked_question_ids, topic_followup_counts, clarification_count, deadline, pending_question, finalized_turn_ids, candidate_facts, consent, status. Persist sau turn cuối cùng và chuyển trạng thái; không chỉ giữ trong RAM.
+
+Consent/mic/speaker/waiting ở cùng Join room. Interview một robot stage + đúng ba controls mic mute/unmute, speaker mute/unmute, End interview; status/errors ngắn trong stage, không timer/captions/extra retry controls. Deadline vẫn nội bộ. End hiệu lực ngay ở loading/reconnect/error và mọi pha: dừng capture/playback, hủy generation/queue, không confirm/forced spoken wrap; persist terminal state + report job rồi trả Roles với “Interview ended”, không hứa xóa. Offline stop local ngay và đối soát terminal/stale-session cleanup, không tự phát lại audio.
+
+Room ghim candidate/campaign/CV ID/version/hash hoặc absence khi publish/invite. CV HR upload tùy chọn, không file là “No CV attached”; không là prompt input/fact/evidence. HR lawful basis/notice trước upload và server scan gate; sai CV sau publish phải revoke/cancel và tạo room mới, không swap history. Xem [room contract](../business/requirements.md#hợp-đồng-dữ-liệu-tối-thiểu). Website English, speech/source transcript Vietnamese.
 
 LLM đề xuất quyết định có cấu trúc, không yêu cầu chain-of-thought:
 

@@ -4,7 +4,11 @@
 
 OpenInterview hỗ trợ nhà tuyển dụng thực hiện bước trao đổi sơ bộ bằng giọng nói tiếng Việt trên trình duyệt. AI hỏi các câu cơ bản nhất quán, ghi nhận câu trả lời và tạo bản tóm tắt để con người xem xét. Sản phẩm không thay thế người ra quyết định và không bảo đảm đánh giá đúng năng lực chỉ từ một cuộc nói chuyện ngắn.
 
-Nhà tuyển dụng cung cấp mô tả công việc (JD), yêu cầu sàng lọc và thông tin công ty/vị trí đã được phê duyệt. Không yêu cầu CV. Trước khi nhận ứng viên, hệ thống đề xuất bộ câu hỏi chung; nhà tuyển dụng chỉnh sửa, duyệt rồi khóa phiên bản. Các ứng viên cùng chiến dịch nhận cùng câu hỏi lõi và tiêu chí đánh giá, dù câu hỏi làm rõ có thể khác nhau.
+Nhà tuyển dụng cung cấp JD, yêu cầu sàng lọc và thông tin đã duyệt. Không yêu cầu CV từ candidate. HR có thể upload CV khi tạo room; thiếu file là “No CV attached”, không chặn eligibility. CV chỉ là HR reference, không parse/score/nạp AI prompt. Nhà tuyển dụng duyệt câu hỏi/rubric/FAQ và khóa version trước phiên; câu hỏi lõi và tiêu chí chung cho chiến dịch.
+
+Desktop only, đúng [7 trang](../product/README.md): Home, Sign in, Roles, Join room, Interview, HR, Admin. Home chỉ navbar, hero hai CTA và robot preview Example. Interview chỉ stage + đúng ba controls mic/speaker/End; End trực tiếp trả Roles với “Interview ended”, không ép wrap hoặc hứa xóa. Consent/mic/speaker/waiting chung Join room. Không candidate profile/history/CV portal. Website English, speech Vietnamese.
+
+Publish/invite khóa exact candidate identity + campaign version + CV ID/version/hash hoặc absence của room. HR sửa draft được; sai CV sau publish phải revoke/cancel room cũ và tạo NEW room, không swap ongoing source history. HR xác minh authority/lawful basis/notice trước upload, không dùng consent phiên về sau để hợp thức hóa. Server validation/quarantine/scan và private object store bắt buộc cho CV retained; không scan không publish room có file. Xem [hợp đồng](requirements.md).
 
 ## Ai làm gì?
 
@@ -44,6 +48,6 @@ Thông tin thường hỏi gồm tên ứng viên tự cung cấp, học vấn/t
 
 ## Dữ liệu và giá trị kỳ vọng
 
-Mặc định không ghi âm; ghi âm cần lựa chọn đồng ý riêng. Bản chép lời và báo cáo cũng cần thông báo mục đích, người được xem và thời hạn lưu cấu hình. Demo ưu tiên dữ liệu giả lập. Ứng viên có thể yêu cầu sửa thông tin theo quy trình được công bố.
+Recording/export ngoài active MVP, không có controls. Transcript/report cần consent phiên và retention công bố; room CV có căn cứ HR riêng trước upload và quyền/retention riêng. Demo ưu tiên synthetic. Candidate yêu cầu sửa/xóa qua contact inline, không profile/CV portal. Xóa gồm copies/backups theo policy; tombstone ngăn job/restore hồi sinh, không hứa xóa tức thời.
 
 Giá trị cần kiểm chứng là giảm thao tác hỏi lặp lại, giúp người tuyển dụng thấy bằng chứng rõ hơn và giữ câu hỏi nhất quán. Chưa có số liệu chứng minh tiết kiệm bao nhiêu thời gian/chi phí. Xem [kế hoạch kiểm chứng](../planning/validation-plan.md) trước khi quyết định dùng thật.

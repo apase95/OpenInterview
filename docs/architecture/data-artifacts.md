@@ -1,10 +1,24 @@
 # Artifact và vòng đời dữ liệu phỏng vấn
 
-Thiết kế đề xuất, chưa có recording/export được triển khai. Đọc cùng [I/O contracts](io-contracts.md), [yêu cầu](../business/requirements.md) và [báo cáo](../report/interview-report.md). Tất cả ví dụ dưới đây là synthetic. Raw là text STT đã finalized nguyên gốc, không phải partial, không phải bản sửa tay và không bảo đảm là ground truth nguyên văn.
+Thiết kế đề xuất, chưa triển khai. Recording/export là future OUT OF SCOPE, không active MVP/UI/disabled controls; các ví dụ file/export/recording dưới đây chỉ là thiết kế tương lai, không backlog hiện hành. Đọc cùng [I/O contracts](io-contracts.md), [yêu cầu](../business/requirements.md) và [báo cáo](../report/interview-report.md). Ví dụ synthetic. Raw là STT finalized nguyên gốc, không partial/bản sửa tay hoặc bảo đảm ground truth. Website English; speech/transcript/evidence nguồn Vietnamese. UI đúng [7 trang desktop](../product/README.md), không candidate portal.
 
 ## Nguồn chuẩn và danh mục
 
-PostgreSQL là nguồn chuẩn cho session, consent, turn, version, correction, job, report và artifact registry. File export là bản dẫn xuất có source version, không thay DB. Không thêm storage service nếu chỉ dùng DB và không lưu recording/export. Khi file/audio được lưu vượt quá lần sinh tạm thời, cần private object store với chính sách truy cập/xóa; không để file trên public URL hoặc đĩa tạm của worker như kho bền vững.
+PostgreSQL là nguồn chuẩn cho room, CVAttachment metadata, session, consent, turn, version, correction, job và report. Private object store BẮT BUỘC hiện tại để giữ HR room CV, không phụ thuộc recording/export. Quarantine/scanner và server-only credentials phải provision trước upload thật; không public URL/worker temp disk làm kho bền vững. Future export chỉ là dẫn xuất, không thay DB.
+
+## Room CV — active MVP
+
+Hợp đồng Room/CVAttachment là [đề xuất chung](../business/requirements.md#hợp-đồng-dữ-liệu-tối-thiểu), không migration đã có. HR có thể upload CV khi tạo room, không candidate upload/profile/library/per-career sharing/history/settings portal. User không bắt buộc CV: null / “No CV attached” cho phép publish/join nếu các cổng khác pass. Candidate không manage/download file mặc định; mismatch qua HR contact inline trước start.
+
+Trước upload HR phải xác minh authority để upload/disclose và lawful basis/notice theo policy riêng. Không gán pre-session CV cho consent phỏng vấn chưa tồn tại, không dùng consent về sau hồi tố. Backend kiểm tra scope, exact candidate/room relationship và bounded PDF (extension/MIME/signature/size, 5 MB configurable proposal). File quarantine, `quarantined/scanning/available/rejected/scan_failed` là trạng thái đề xuất; chỉ scan thành công mới available. Không scanner/failed scan => không publish room có file, không chỉ cảnh báo client.
+
+Publish/invite khóa candidate identity + campaign version + CV attachment ID/version/SHA-256/size hoặc explicit absence. HR sửa draft được; sai file sau publish phải revoke/cancel room cũ và tạo NEW room với attachment đã sửa, không overwrite/swap ongoing session/source history. Object keys opaque; metadata version/checksum immutable. CV chỉ HR reference, claims chưa xác minh; không parsing/scoring/prompt input. Report provenance có thể ghim room/CV ref/hash nhưng không cite CV thành finalized candidate turn. `candidate-profile.json` bên dưới là machine-derived fact/report artifact, KHÔNG candidate profile portal.
+
+Fresh authorization cho mỗi signed private URL TTL ngắn, chỉ assigned HR/worker khi job cần, không candidate mặc định hoặc blanket Admin access. Revoke/delete chặn URL mới và xử lý URL còn sống theo TTL/platform limits công bố. Audit ID/action/time, không log URL/content/secrets. Retention riêng room/CV kể cả chưa có session, quarantine/rejected/orphan files và copies/backups; xóa DB metadata/object/cache/copies theo policy và legal hold. Backup expiration/restore phải áp tombstones; scan/report/retry jobs kiểm tra tombstone trước publish, không hồi sinh file. Không hứa instant backup deletion.
+
+## File artifact catalogue — future OUT OF SCOPE
+
+Các file/export/recording sau không thuộc active MVP; logic finalized transcript/correction/report vẫn áp dụng cho dữ liệu DB hiện hành. Không sinh UI hoặc task capture/export từ ví dụ này.
 
 | Artifact đề xuất | Nội dung / format | Điều kiện và nguồn |
 | --- | --- | --- |
@@ -12,7 +26,7 @@ PostgreSQL là nguồn chuẩn cho session, consent, turn, version, correction, 
 | `transcript.raw.jsonl` | Một finalized turn mỗi dòng; cả candidate và assistant confirmed text | Consent transcript; giữ nguyên final và provenance |
 | `transcript.raw.txt` | Bản dễ đọc có role, turn ID, audio offsets và nhãn unknown/gap | Dẫn xuất từ raw, không sửa chính tả âm thầm |
 | `transcript.reviewed.jsonl`, `transcript.reviewed.txt` | View tùy chọn áp correction; `corrections.jsonl` lưu original ref, thay đổi, người sửa, UTC/lý do | Không ghi đè raw; candidate tự sửa cũng là turn/correction có ref |
-| `candidate-profile.json` | Fact tối thiểu + collection status + evidence refs | Tự khai, chưa xác minh; không cần CV; tuổi tắt mặc định, không DOB/địa chỉ đầy đủ |
+| `candidate-profile.json` | Machine-derived facts + collection status + evidence refs, KHÔNG portal | Tự khai, chưa xác minh; không yêu cầu CV từ candidate; tuổi tắt mặc định, không DOB/địa chỉ đầy đủ |
 | `job-fit-summary.md`, `report.json` | Mô tả ngắn suitability, tiêu chí, thiếu dữ kiện, reviewer | Job bền vững từ finalized turns; không nhãn hire/reject hay điểm tuổi |
 | `candidate-questions.json` | Candidate FAQ, turn, answer status/text đã xác nhận, source versions, recruiter followup | Chỉ bounded approved context; unknown/conflict/expired không tự điền |
 | `events.jsonl` | Event ID/sequence/UTC/type, status và refs tối thiểu | Không token, secret, prompt hay nội dung PII đầy đủ |
@@ -21,7 +35,7 @@ PostgreSQL là nguồn chuẩn cho session, consent, turn, version, correction, 
 
 Mỗi loại có retention/access riêng, không mặc định lưu mọi sản phẩm trung gian. Không đồng ý recording vẫn được phiên dựa transcript nếu có consent phù hợp cho phiên/transcript/report. Nếu không có consent bắt buộc của phiên thì không bắt đầu. Audio stream tạm không tự tạo recording.
 
-## Cây export đề xuất
+## Cây export đề xuất — future OUT OF SCOPE
 
 ID tenant/session là opaque, không tên/email/số điện thoại trong đường dẫn. Cây minh họa các file có thể có, không cam kết mọi phiên đều có đủ:
 
@@ -111,7 +125,7 @@ Ví dụ correction của reviewer sửa lỗi STT giả định, và profile d�
 
 ## Báo cáo suitability và FAQ
 
-Ví dụ nội dung `job-fit-summary.md`: “Ứng viên tự khai từng trực tiếp xử lý yêu cầu hỗ trợ (ct_01), phù hợp một phần với tiêu chí kinh nghiệm hỗ trợ. Chưa có ví dụ tình huống và chưa thu thập lịch làm việc. Cần recruiter xác minh; chưa có kết luận tuyển dụng.” Không nâng một câu tự khai thành năng lực đã kiểm chứng.
+Ví dụ future `job-fit-summary.md`: “The candidate reports handling support requests (ct_01), partly supporting the support experience criterion. A detailed example and availability have not been collected. Recruiter verification is needed; this is not a hiring decision.” App-generated summary English, original transcript Vietnamese; không nâng tự khai thành năng lực đã kiểm chứng.
 
 ```json
 {
@@ -120,10 +134,10 @@ Ví dụ nội dung `job-fit-summary.md`: “Ứng viên tự khai từng trực
   "input_version": "transcript-v1",
   "rubric_version": "rubric-v2",
   "status": "draft",
-  "summary": "Tự khai có kinh nghiệm hỗ trợ; còn thiếu ví dụ cụ thể và lịch làm việc.",
+  "summary": "Self-reported support experience; a detailed example and availability are missing.",
   "criteria": [
-    {"criterion_id":"experience.customer_support","requirement_status":"partial","evidence_status":"supported","evidence_turn_ids":["ct_01"],"note":"Tự khai, chưa xác minh"},
-    {"criterion_id":"availability","requirement_status":"missing","evidence_status":"not_collected","evidence_turn_ids":[],"note":"Chưa hỏi, không phải năng lực thấp"}
+    {"criterion_id":"experience.customer_support","requirement_status":"partial","evidence_status":"supported","evidence_turn_ids":["ct_01"],"note":"Self-reported, unverified"},
+    {"criterion_id":"availability","requirement_status":"missing","evidence_status":"not_collected","evidence_turn_ids":[],"note":"Not asked; not low ability"}
   ],
   "reviewer": {"id":null,"reviewed_at":null}
 }
@@ -143,7 +157,7 @@ Ví dụ nội dung `job-fit-summary.md`: “Ứng viên tự khai từng trực
 
 FAQ trên là ví dụ độc lập: chỉ xuất entry sau khi turn `ct_02` có trong snapshot thực tế. Không có nguồn được duyệt thì unknown; không suy đoán chính sách. Khi answered phải giữ source ID/version và hiệu lực tại lúc trả lời; câu trả lời planned chưa phát không thành confirmed answer.
 
-## Recording hai phía — chỉ opt-in riêng
+## Recording hai phía — future OUT OF SCOPE, chỉ opt-in riêng nếu duyệt sau
 
 Audio off mặc định. Chỉ bắt đầu capture sau consent recording rõ ràng, riêng với consent transcript/report; không lưu preconsent audio hoặc buffer trước consent vào file. Đề xuất tích hợp LiveKit recording/egress để thu hai phía, phải kiểm chứng deployed plan, quyền, SDK, track và consent gate. Không giả định ghi mic agent sẽ bắt được remote playback hoàn hảo. Mix hai phía là baseline xuất tùy chọn; separate tracks chỉ khi khả năng/lý do được xác minh, kèm speaker mapping. Không coi silence là không có dropout.
 
@@ -171,7 +185,7 @@ Ví dụ metadata lỗi không có file (không có WAV minh họa thật):
 
 Khi file tồn tại, metadata phải ghi path, byte size/checksum (hoặc ref registry), format `WAV/PCM`, bits/sample, channels, sample rate thật; UTC start/end, session offset bắt đầu, track IDs/role và mixed/separate. Mỗi gap có session start/end ms, lý do/unknown, và cách mapping file offsets (giữ silence hay timeline bị nén). Ghi việc bắt đầu muộn, dropout, dừng do withdrawal và recording failure; không khẳng định file dài bằng toàn phiên. Retention áp cả track gốc và mix/export.
 
-## Vòng đời, quyền và xóa
+## Vòng đời file artifact tương lai — OUT OF SCOPE
 
 ```mermaid
 flowchart TD
@@ -205,7 +219,7 @@ Download phải auth/authorize tenant + session + artifact mỗi lần cấp pri
 
 Retention cấu hình riêng transcript, corrections, profile, report, events, audio và exports; công bố trước thu dữ liệu, không áp số ngày tùy tiện. Xóa gồm DB/source dẫn xuất, object/track/mix, exports, caches và provider copies trong phạm vi chính sách/hợp đồng; backup theo thời hạn/giới hạn đã công bố, không hứa xóa tức thời khỏi backup. Khi restore phải áp lại tombstone/yêu cầu xóa để không hồi sinh dữ liệu. Legal hold/nghĩa vụ áp dụng và bằng chứng consent tối thiểu cần chủ sở hữu chốt; không mặc định giữ report vô hạn sau khi xóa audio.
 
-## Checklist nghiệm thu trước triển khai
+## Checklist artifact tương lai — OUT OF SCOPE active MVP
 
 - [ ] Không consent phiên thì không bắt đầu; không audio opt-in thì không recording/object audio, không preconsent capture; quyền mic không thay consent.
 - [ ] Rút recording consent dừng capture tương lai, reconnect/retry không tự bật lại; từ chối audio vẫn cho phiên transcript đã consent riêng.
@@ -217,4 +231,4 @@ Retention cấu hình riêng transcript, corrections, profile, report, events, a
 - [ ] Crash/retry job không nhân đôi artifact/report hiệu lực, đối soát object mồ côi, source sửa tạo version mới cần duyệt lại.
 - [ ] Retention/xóa bao trùm DB, objects, track, exports/cache và giới hạn backup; job/restore không hồi sinh dữ liệu đã xóa.
 
-Còn phải chốt: schema triển khai/giới hạn payload, consent và retention theo tổ chức/pháp lý, provider region/retention, recording egress và tracking playback thật, quyền candidate download, codec/export configuration. Đây là tiêu chí cần kiểm chứng, không phải kết quả test ứng dụng.
+Còn phải chốt cho MVP: schema/limits, scan service, HR lawful basis/notice owner, CV retention/backups, consent phiên, provider region/retention và playback tracking thật. Recording egress, candidate artifact download và codec/export configuration chỉ là future OUT OF SCOPE. Đây không phải kết quả test ứng dụng.

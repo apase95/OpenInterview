@@ -10,6 +10,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 
 class SmokeTests(unittest.TestCase):
+    def test_shared_placeholder_validation(self):
+        from backend.config import is_placeholder
+        for value in (None, '', '   ', 'short', 'sk_xxxxxxxxx', 'wss://your-project.livekit.cloud'):
+            self.assertTrue(is_placeholder(value))
+        self.assertFalse(is_placeholder(' synthetic-safe-value '))
+
     def test_main_offline(self):
         loader = Mock()
         dotenv = types.ModuleType("dotenv")

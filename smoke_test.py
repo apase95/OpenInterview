@@ -3,18 +3,14 @@ import os
 import sys
 import time
 
+from backend.config import is_placeholder
+
 GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
 CYAN = "\033[96m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
-
-def is_placeholder(val: str | None) -> bool:
-    if not val:
-        return True
-    val = val.strip()
-    return "xxxx" in val or "your-project" in val or len(val) < 8
 
 async def test_livekit() -> bool:
     print(f"\n{BOLD}▶ 1. LiveKit admin API (list rooms; not WebRTC)...{RESET}")

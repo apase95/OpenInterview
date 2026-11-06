@@ -1,0 +1,21 @@
+FROM python:3.12.12-slim AS builder
+WORKDIR /build
+COPY backend/requirements.txt ./requirements.txt
+RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.12.12-slim AS runtime
+ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+RUN groupadd --gid 1000 app && useradd --uid 1000 --gid 1000 --create-home app
+WORKDIR /app
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=app:app backend/__init__.py backend/config.py backend/database.py backend/healthcheck.py ./backend/
+USER app
+
+FROM runtime AS api
+COPY --chown=app:app backend/api.py ./backend/
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
+
+FROM runtime AS worker
+COPY --chown=app:app backend/worker.py ./backend/
+CMD ["python", "-m", "backend.worker", "--no-env-file"]

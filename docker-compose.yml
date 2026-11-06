@@ -1,0 +1,94 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: runtime
+    ports: ["127.0.0.1:${WEB_PORT:-3000}:3000"]
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 15s
+  api:
+    networks: [default, database]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api
+    environment: &database
+      DATABASE_HOST: postgres
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: openinterview
+      DATABASE_USER: openinterview
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in explicit --env-file}
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+  worker:
+    networks: [default, database]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: worker
+    environment:
+      <<: *database
+      LIVEKIT_URL: ${LIVEKIT_URL:?Set LIVEKIT_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?Set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?Set LIVEKIT_API_SECRET}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:?Set GOOGLE_API_KEY}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:?Set DEEPGRAM_API_KEY}
+      ELEVEN_API_KEY: ${ELEVEN_API_KEY:?Set ELEVEN_API_KEY}
+      GEMINI_CONTROLLER_MODEL: ${GEMINI_CONTROLLER_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_REPORT_MODEL: ${GEMINI_REPORT_MODEL:-gemini-3.8-flash}
+      DEEPGRAM_MODEL: ${DEEPGRAM_MODEL:-nova-3}
+      DEEPGRAM_LANGUAGE: ${DEEPGRAM_LANGUAGE:-vi}
+      ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_flash_v2_5}
+    depends_on:
+      postgres: {condition: service_healthy}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "python", "-m", "backend.healthcheck"]
+      interval: 5s
+      timeout: 4s
+      retries: 4
+      start_period: 10s
+  postgres:
+    networks: [database]
+    image: postgres:16.11-alpine
+    environment:
+      POSTGRES_USER: openinterview_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in explicit --env-file}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in explicit --env-file}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/10-app.sh:ro
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$$DATABASE_PASSWORD\" psql -h 127.0.0.1 -U openinterview -d openinterview -tAc 'SELECT 1' | grep -qx 1"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 15s
+volumes:
+  postgres-data:
+networks:
+  database:
+    internal: true

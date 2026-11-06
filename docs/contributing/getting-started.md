@@ -11,7 +11,8 @@ You do not need host Node.js or Python for the Docker stack.
 
 ## Clone and configure
 
-New clones use the default branch, `dev`.
+New clones use the default branch, `dev`. The clone below is for contributors
+with repository write access. Without it, use the fork instructions below.
 
 ```sh
 git clone https://github.com/apase95/OpenInterview.git
@@ -29,15 +30,18 @@ The root `.env` is for provider smoke checks, not Docker Compose.
 
 ### Existing clones (optional)
 
-With local work saved, update and switch to `dev`:
+Save local work first (commit it on its own branch or stash it), then check
+`git status` for a clean working tree. Switch to `dev` before pulling:
 
 ```sh
 git fetch origin
-git switch dev
-# Only if no local dev branch exists: git switch --track origin/dev
-# Optional: refresh origin's default-branch pointer
-git remote set-head origin -a
+git checkout dev
+git pull origin dev
 ```
+
+After fetching, `git checkout dev` normally creates a tracking branch if only
+`origin/dev` exists. If needed, use `git checkout -b dev origin/dev` only when
+there is no local `dev` branch.
 
 ## Start and stop
 
@@ -60,9 +64,65 @@ Do not delete that volume as a normal troubleshooting step.
 
 ## Make a change
 
-Branch from `dev`, use a name such as `feat/short-name` or `fix/short-name`,
-and open the PR into `dev`. Keep the change small.
-Read the [conventions](conventions.md) before opening a pull request.
+### With repository write access
+
+Start with saved work and a clean working tree. For each new task:
+
+```sh
+git status
+git checkout dev
+git pull origin dev
+git checkout -b feat/short-name
+# Make your change and run the relevant checks.
+git diff
+# Example: stage only the file you intended to change.
+git add docs/contributing/getting-started.md
+git diff --cached
+git commit -m "feat: describe your change"
+git push -u origin feat/short-name
+```
+
+Replace the branch name, file path, and commit message for your task. Never stage
+secrets or private env files. Open a PR from your feature branch into `dev` and
+follow the [review and merge rules](conventions.md#branches-and-pull-requests).
+
+`git pull origin dev` updates the branch you are currently on; it does not switch
+branches. On a feature branch it integrates `dev` into that feature branch.
+Pull may merge or rebase according to your Git settings; it is not a reset or
+always a fast-forward. If local `dev` has diverged, stop, inspect, and coordinate
+with a maintainer rather than forcing or discarding work.
+Optional safety: `git pull --ff-only origin dev` refuses divergent history.
+
+After a squash merge, start a fresh branch from updated `dev` using the first
+four commands above. Do not reuse the old feature branch or pull `dev` into it
+as your next-task sync step.
+
+### Without repository write access
+
+[Fork the repository](https://docs.github.com/en/get-started/quickstart/fork-a-repo)
+and clone your fork instead of the official repository. `origin` must point to
+your fork; add the official repository as `upstream` once:
+
+```sh
+git remote add upstream https://github.com/apase95/OpenInterview.git
+```
+
+With work saved and the working tree clean, start each task like this:
+
+```sh
+git fetch upstream
+git checkout dev
+git pull upstream dev
+git checkout -b feat/short-name
+```
+
+If local `dev` is missing, use `git checkout -b dev upstream/dev` instead of
+`git checkout dev`. The same pull/divergence cautions above apply. Make and check
+your change, stage intended files, and commit as above. Push with
+`git push -u origin feat/short-name`, then open a PR into the official
+repository's `dev`, not your fork's `dev`. First-time fork workflows may need
+maintainer approval before CI can run.
+
 For direct web/API setup, offline tests, logs, and optional integration checks,
 see the [development guide](development.md). Tests need separate host dependencies;
 the wrapper does not install them.

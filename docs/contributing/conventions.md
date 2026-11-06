@@ -16,19 +16,28 @@ Include screenshots for UI changes.
 ## Branches and pull requests
 
 Create feature/fix branches from `dev` and open normal PRs into `dev`.
-Get one approval from a different authorized reviewer, resolve conversations,
-and pass all three required checks: `Web checks`, `Python checks`, `Docker checks`.
-New commits dismiss old approvals. Squash merge with a concise commit message.
+Both `dev` and `main` are protected: no direct pushes, including by the owner.
+See [getting started](getting-started.md#make-a-change) for the Git command flow.
+Get one approval from a different authorized reviewer with write access;
+read-only contribution access does not automatically grant review or merge rights.
+Resolve conversations and pass all three required checks: `Web checks`,
+`Python checks`, `Docker checks`. The PR must be up to date with the latest base
+branch, with checks passing for that updated state before merging.
+New commits dismiss old approvals; request review again after changes.
+Squash merge only, with a concise commit message.
 GitHub detects merge conflicts separately; CI checks do not replace that check.
 
 GitHub does not allow authors to approve their own PRs. Owner `apase95` uses a
 pull-request-only Repository Admin bypass of the review ruleset, not the separate
-checks/PR/integrity ruleset: a PR and passing checks are still required.
+checks/PR/integrity ruleset: a PR, passing checks, and an up-to-date branch are
+still required. This is not permission to force a merge with failing checks.
 The owner is currently the sole admin. Future admins would receive the same
 review bypass, so do not grant that role by accident.
 
 `main` is the separate stable branch; target it only for an intentional release PR.
-Merging is not an automatic release or deployment. Keep `dev` after a release.
+Merging is not an automatic release or deployment. Do not automatically delete
+`dev` or `main`. After a squash merge, start the next task on a fresh branch
+from updated `dev`, not the old feature branch.
 Coordinate base changes for existing feature branches rather than switching them blindly.
 Repository settings are managed separately from this workflow.
 

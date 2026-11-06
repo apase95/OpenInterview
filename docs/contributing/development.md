@@ -72,6 +72,15 @@ Web has no provider imports, public keys or environment serialization; config is
 Python-only. No auth, provider readiness, measured accessibility or asset-license
 approval is claimed. Verify asset rights before release.
 
+## Before opening a PR
+
+Run the local checks relevant to your change and report commands, results, and
+anything skipped in the PR. For docs-only changes, check links, anchors, code
+fences, and `git diff --check`; application tests are not needed.
+Local checks do not replace passing GitHub CI on the up-to-date PR branch.
+Follow the [review and merge rules](conventions.md#branches-and-pull-requests)
+for required checks and approvals; never report a manual check as a CI result.
+
 ## Docker local stack (synthetic data first)
 
 Docker Engine and Compose v2+ are required. Always pass `--env-file`; do not use

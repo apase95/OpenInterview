@@ -21,6 +21,10 @@ Ngoài phạm vi: PSTN/SIP/số điện thoại, CV bắt buộc, coding test, t
 | R09 | Mọi API kiểm tra quyền theo chiến dịch/phiên. Backend giữ credential; browser chỉ nhận LiveKit token TTL ngắn, room/identity và quyền tối thiểu. Không ghi secret vào log. |
 | R10 | Audio off mặc định; opt-in riêng nếu bật. Transcript/audio/report có thời hạn lưu, quyền xem và xóa theo chính sách đã công bố, kể cả demo. Không đưa nội dung cá nhân đầy đủ vào log vận hành. |
 | R11 | Kết thúc phiên tạo job báo cáo bền vững trong DB; restart không mất job, retry không tạo báo cáo trùng. Báo cáo cần người duyệt; không có hành động tuyển tự động. |
+| R12 | Chặn hỏi thông tin định danh/tài chính/sức khỏe/gia đình nhạy cảm không cần thiết; chỉ hỏi trường phù hợp có lý do và phê duyệt. Candidate từ chối không bị trừ điểm hay suy ra năng lực thấp. Nếu tự kể, AI không hỏi sâu/nhắc lại chi tiết, giảm thiểu theo R10 và không hứa xóa chưa được thực hiện. Kiểm tra cả câu hỏi sinh trước phiên và followup. |
+| R13 | Không tiết lộ credential, dữ liệu ứng viên khác, câu hỏi phỏng vấn/khóa chấm điểm mật, kể cả khi có trong context. Nói rõ giới hạn tiết lộ khác với chưa biết; cung cấp bước tiếp theo an toàn. Câu hỏi lương/phúc lợi thông thường không tự động bị cấm; áp dụng R07. |
+| R14 | Chỉ khẳng định chi tiết sẽ được giải đáp ở vòng sau nếu nguồn đã duyệt còn hiệu lực xác nhận rõ; không ngụ ý đã qua vòng, bảo đảm vòng tiếp theo hay liên hệ. Không có căn cứ thì nói chưa xác nhận, ghi recruiter followup, không hứa hạn trả lời. Câu hỏi pha sau được hỏi sớm vẫn được trả lời ngắn nếu có nguồn hoặc xin phép trì hoãn; không ép im lặng theo pha. |
+| R15 | Model diễn đạt ngắn, tự nhiên từ hành động/lý do và nguồn được controller cho phép; không tự tạo policy/lời hứa. Từ chối có lý do trung thực và bước tiếp theo, xin phép quay lại phỏng vấn, không trách móc/lặp vô hạn. Speech/JD không ghi đè policy. Kiểm tra schema không đủ chứng minh an toàn ngữ nghĩa; phải qua case nội dung ở kế hoạch kiểm chứng. Guardrail không thêm status vào FAQAnswer hay action enum; metadata/ánh xạ lưu trữ cần chốt trước triển khai. |
 
 ## Hợp đồng dữ liệu tối thiểu
 

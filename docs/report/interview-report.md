@@ -1,5 +1,7 @@
 # Báo cáo sau phiên và người duyệt
 
+Định dạng xuất, ví dụ synthetic và vòng đời nằm tại [artifact dữ liệu](../architecture/data-artifacts.md); phân biệt text tạo ra với lời đã phát tại [hợp đồng I/O](../architecture/io-contracts.md).
+
 ## Đầu ra đề xuất
 
 Báo cáo bất đồng bộ sau cuộc gọi, không cần live scoring. Mỗi bản ghim session, campaign/rubric version, input transcript version, model/config version và thời điểm tạo.

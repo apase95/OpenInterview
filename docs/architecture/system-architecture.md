@@ -1,5 +1,7 @@
 # Kiến trúc và công nghệ đề xuất
 
+Chi tiết dữ liệu tại [hợp đồng I/O](io-contracts.md) và [artifact/lưu trữ file tùy chọn](data-artifacts.md); các hợp đồng này vẫn là thiết kế đề xuất.
+
 ## Thành phần tối thiểu
 
 ```mermaid

@@ -36,7 +36,7 @@ def main():
                   DEEPGRAM_API_KEY=SENTINEL, ELEVEN_API_KEY=SENTINEL)
     env = {key: os.environ[key] for key in ('PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'XDG_RUNTIME_DIR') if key in os.environ}
     # Explicit env-file prevents Compose's implicit root .env loading.
-    with tempfile.TemporaryDirectory(prefix='oi-compose-', dir='/tmp/opencode') as directory:
+    with tempfile.TemporaryDirectory(prefix='oi-compose-') as directory:
         filename = Path(directory) / 'synthetic.env'
         filename.write_text('')
         os.chmod(filename, 0o600)

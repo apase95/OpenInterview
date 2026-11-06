@@ -73,7 +73,7 @@ def get_started(command, cwd, url):
 
 def main():
     started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix='openinterview-web-', dir='/tmp/opencode') as directory:
+    with tempfile.TemporaryDirectory(prefix='openinterview-web-') as directory:
         web = Path(directory)
         for filename in ('package.json', 'package-lock.json', 'tsconfig.json', 'next-env.d.ts',
                          'app/layout.tsx', 'app/page.tsx', 'app/globals.css',

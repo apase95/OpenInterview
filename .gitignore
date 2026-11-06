@@ -3,3 +3,4 @@
 # OpenArms runtime logs
 .openarms/logs/
 .openarms/.handoff-lock
+.env

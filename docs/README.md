@@ -2,6 +2,14 @@
 
 Đây là thiết kế đề xuất cho sản phẩm độc lập, chưa phải mô tả một ứng dụng đã triển khai. Phỏng vấn giọng nói chạy trong trình duyệt, không gọi điện thoại. Website UI/UX hoàn toàn bằng tiếng Anh; chỉ hội thoại phỏng vấn nói bằng tiếng Việt. Tài liệu có thể giải thích bằng tiếng Việt. Transcript và bằng chứng nguyên văn giữ tiếng Việt như dữ liệu nguồn, không dịch đè; xem [quy tắc ngôn ngữ UI](product/ui-spec.md#ngon-ngu-ui).
 
+## Contributor guides
+
+- [Getting started](contributing/getting-started.md): local Docker setup.
+- [Development guide](contributing/development.md): commands, checks, and limits.
+- [Conventions](contributing/conventions.md): code, pull requests, and safe data handling.
+
+## Tài liệu sản phẩm và kế hoạch
+
 | Tài liệu | Người đọc và mục đích |
 | --- | --- |
 | [Tổng quan nghiệp vụ](business/overview.md) | Kinh doanh, kinh tế, tuyển dụng: giá trị, giới hạn và hành trình |

@@ -1,6 +1,8 @@
 # Development guide
 
-For the short Docker setup and contributor commands, see [the README](../README.md).
+For the short Docker setup, see [getting started](getting-started.md).
+For project context, see [the README](../../README.md). Run direct commands below
+from the repository root.
 `./scripts/dev.sh` works from any directory. `test` runs offline Python tests;
 `verify` explicitly runs the synthetic Docker integration check described below.
 Install the backend test requirements before running offline tests.
@@ -73,9 +75,29 @@ approval is claimed. Verify asset rights before release.
 
 Docker Engine and Compose v2+ are required. Always pass `--env-file`; do not use
 the provider smoke `.env` for Compose or put provider values in the web environment.
+Compose reads the file as data: never `source` or `eval` an env file.
+
+The wrapper handles the explicit Compose file and env path:
+
+| Command | Action |
+| --- | --- |
+| `./scripts/dev.sh build` | Build images |
+| `./scripts/dev.sh start` | Rebuild and start detached; wait up to 120 seconds for health |
+| `./scripts/dev.sh stop` | Remove containers; preserve database volume |
+| `./scripts/dev.sh restart` | Rebuild and recreate containers; preserve volume |
+| `./scripts/dev.sh status` | Show service state and published ports |
+| `./scripts/dev.sh logs [web\|api\|worker\|postgres]` | Follow logs, starting with the last 100 lines |
+| `./scripts/dev.sh test` | Run all offline Python test files |
+| `./scripts/dev.sh verify` | Opt-in synthetic Docker integration check |
+
+`help` needs no setup. `test` and `verify` prefer `.venv/bin/python`, then
+`python3`; neither installs dependencies or loads private env files.
+For a scoped code change, prefer the relevant unittest filename shown above or below.
+There is no container hot reload: run `start` after edits. Ctrl+C in `logs` only
+stops following logs, not the detached stack. Review and redact logs before sharing.
 
 ```sh
-cp .env.docker.example .env.docker
+test -e .env.docker || cp .env.docker.example .env.docker
 # Fill privately: POSTGRES_PASSWORD (admin), separate DATABASE_PASSWORD (app),
 # LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, GOOGLE_API_KEY,
 # DEEPGRAM_API_KEY, ELEVEN_API_KEY. Placeholders are not working provider keys.
@@ -147,8 +169,8 @@ This is local scaffold evidence, not production security approval or the Sprint 
 ```sh
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+python -m pip install -r requirements.txt
+test -e .env || cp .env.example .env
 ```
 
 Fill `.env` privately. Never commit keys or share its contents.

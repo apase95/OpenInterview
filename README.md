@@ -1,75 +1,62 @@
-# OpenInterview
+<h1 align="center">
+    <img src="public/images/logo.svg" alt="OpenInterviewLogo" width="272" height="50">
+</h1>
 
-OpenInterview is building voice interviews in Vietnamese, with an English website.
-Today it has a static Home page, a FastAPI API, PostgreSQL, and an idle worker
-scaffold—not a working interview agent. Auth, rooms, media and jobs are not built.
+<div align="center">
+    <img src="public/images/home.png" alt="OpenInterviewHomePage" width="60%">
+</div>
 
-## Start locally
 
-Install Git, Docker Engine with Compose v2+, and Bash (use WSL2 on Windows).
+---
+AI-powered voice interviews in Vietnamese, with people making the decisions.
 
-```sh
-git clone https://github.com/apase95/OpenInterview.git
-cd OpenInterview
-cp .env.docker.example .env.docker
-# Edit .env.docker privately before starting.
-./scripts/dev.sh start
-```
+OpenInterview aims to help recruiters run short preliminary interviews with an AI
+voice agent. The planned agent listens to Vietnamese speech, asks HR-approved
+questions, and answers from approved company information. After the interview,
+AI will prepare an evidence-based summary for recruiters to review.
+People make the hiring decisions, not the AI.
 
-Set `POSTGRES_PASSWORD` and a separate `DATABASE_PASSWORD`. Fill the six provider
-URL/credential fields listed in the template. Never commit or share private env
-files. The worker validates configuration but makes no provider requests.
-Do not use the provider smoke `.env` for Docker or put provider keys in web env.
+The voice pipeline is **STT → LLM → TTS**. A controller
+checks the AI's proposed actions, question limits, and guardrails before it responds.
 
-Default URLs: web http://127.0.0.1:3000, API liveness
-http://127.0.0.1:8000/health, and database readiness
-http://127.0.0.1:8000/ready. `WEB_PORT` and `API_PORT` can change these ports;
-use `status` to see the published addresses.
+All website UI is in English. Interview speech is in Vietnamese.
 
-| Command (`./scripts/dev.sh …`) | Action |
-| --- | --- |
-| `help` (or no command) | Show commands; no setup needed |
-| `build` | Build images |
-| `start` | Rebuild and start detached; wait up to 120 seconds for health |
-| `stop` | Remove containers; keep database volume |
-| `restart` | Rebuild and recreate containers; keep database volume |
-| `status` | Show service state and published ports |
-| `logs [web\|api\|worker\|postgres]` | Follow logs, starting with the last 100 lines |
-| `test` | Run offline Python tests |
-| `verify` | Opt-in synthetic Docker integration check |
+## Current status
 
-Containers have no hot reload: run `start` again after code changes.
-Ctrl+C does not stop a detached stack; in `logs` it only stops following logs.
-Use `stop` to stop the stack. Review and redact logs before sharing them.
-Changing passwords in the env file does not rotate an existing database password.
-Never remove the database volume unless you intend to lose its data.
+This is an early scaffold: a static Home page, a FastAPI API, PostgreSQL,
+and an idle worker. It is not a working interview agent yet.
+Authentication, interview rooms, media, and report jobs are planned, not built.
 
-## Test and contribute
+## Stack
 
-Offline tests need Python 3.12+ and the backend test dependencies:
+### AI and voice
 
-```sh
-python3 -m venv .venv
-.venv/bin/pip install -r backend/requirements-test.txt
-./scripts/dev.sh test
-# Optional: Docker integration, synthetic data only; builds images and takes longer.
-./scripts/dev.sh verify
-```
+Configured model choices are listed below. The full voice pipeline is not connected
+yet; provider access checks do not prove interview quality or model availability.
 
-`test` prefers `.venv/bin/python`, then `python3`; it does not load env files or
-call providers. `verify` uses its own temporary synthetic env and Docker project,
-and removes only its own test resources. It needs no private `.env.docker`.
-Neither command installs dependencies for you.
+| Component | Technology | Purpose |
+| --- | --- | --- |
+| Speech-to-text (STT) | Deepgram Nova-3, language `vi` | Turn Vietnamese speech into text |
+| Interview LLM | Google Gemini, `gemini-3.5-flash-lite` | Propose questions and responses |
+| Report LLM | Google Gemini, `gemini-3.8-flash` | Prepare summaries for human review |
+| Text-to-speech (TTS) | ElevenLabs, `eleven_flash_v2_5` | Turn response text into speech |
+| Voice transport and agent runtime | LiveKit Cloud and LiveKit Agents for Python | Connect browser audio to the agent |
 
-Create a branch such as `feat/short-name`, make a small change, and run `test`
-plus checks relevant to your change. Use a short commit message (`feat: …`,
-`fix: …`, or `init: …`), push your branch, and open a pull request. Describe the
-change, checks and limits; wait for maintainer review. Do not include secrets.
+Model IDs are backend configuration, not fixed product requirements. Voice selection,
+Vietnamese quality, and plugin compatibility still need testing.
 
-See the [development guide](docs/development.md) for direct web/API setup,
-configuration, verification limits, database notes and provider smoke scope.
-The real `python smoke_test.py` calls external providers and may cost money;
-it is never run by this wrapper.
+### Application
 
-Planning: [docs index](docs/README.md), [sprint plan](docs/planning/sprint-plan.md),
-and [implementation checklist](docs/planning/implementation-checklist.md).
+- Next.js App Router, TypeScript, and Tailwind CSS v4 for the website.
+- Python and FastAPI for the API and worker scaffold.
+- PostgreSQL and Docker Compose for the local stack.
+
+## Explore and contribute
+
+- [Get started](docs/contributing/getting-started.md) — local Docker setup.
+- [Development guide](docs/contributing/development.md) — commands, checks, and limits.
+- [Conventions](docs/contributing/conventions.md) — small changes and safe data handling.
+- [Documentation](docs/README.md) — product, architecture, and planning.
+- [Sprint plan](docs/planning/sprint-plan.md) — proposed work and acceptance gates.
+
+---

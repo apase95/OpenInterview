@@ -11,6 +11,8 @@ You do not need host Node.js or Python for the Docker stack.
 
 ## Clone and configure
 
+New clones use the default branch, `dev`.
+
 ```sh
 git clone https://github.com/apase95/OpenInterview.git
 cd OpenInterview
@@ -24,6 +26,18 @@ The worker validates configuration but makes no provider requests or jobs.
 Do not change model settings unless your task asks for it.
 Never commit private env files or put provider keys in the browser environment.
 The root `.env` is for provider smoke checks, not Docker Compose.
+
+### Existing clones (optional)
+
+With local work saved, update and switch to `dev`:
+
+```sh
+git fetch origin
+git switch dev
+# Only if no local dev branch exists: git switch --track origin/dev
+# Optional: refresh origin's default-branch pointer
+git remote set-head origin -a
+```
 
 ## Start and stop
 
@@ -46,7 +60,8 @@ Do not delete that volume as a normal troubleshooting step.
 
 ## Make a change
 
-Use a branch such as `feat/short-name` or `fix/short-name` and keep the change small.
+Branch from `dev`, use a name such as `feat/short-name` or `fix/short-name`,
+and open the PR into `dev`. Keep the change small.
 Read the [conventions](conventions.md) before opening a pull request.
 For direct web/API setup, offline tests, logs, and optional integration checks,
 see the [development guide](development.md). Tests need separate host dependencies;

@@ -11,8 +11,26 @@ short messages such as `feat: add ...`, `fix: correct ...`, or `init: set up ...
 match the project style. Stage only intended files.
 
 In a pull request, explain what changed, what you checked, and any limits.
-Include screenshots for UI changes. Ask for maintainer review and confirm the
-target branch rather than assuming a separate staging branch exists.
+Include screenshots for UI changes.
+
+## Branches and pull requests
+
+Create feature/fix branches from `dev` and open normal PRs into `dev`.
+Get one approval from a different authorized reviewer, resolve conversations,
+and pass all three required checks: `Web checks`, `Python checks`, `Docker checks`.
+New commits dismiss old approvals. Squash merge with a concise commit message.
+GitHub detects merge conflicts separately; CI checks do not replace that check.
+
+GitHub does not allow authors to approve their own PRs. Owner `apase95` uses a
+pull-request-only Repository Admin bypass of the review ruleset, not the separate
+checks/PR/integrity ruleset: a PR and passing checks are still required.
+The owner is currently the sole admin. Future admins would receive the same
+review bypass, so do not grant that role by accident.
+
+`main` is the separate stable branch; target it only for an intentional release PR.
+Merging is not an automatic release or deployment. Keep `dev` after a release.
+Coordinate base changes for existing feature branches rather than switching them blindly.
+Repository settings are managed separately from this workflow.
 
 ## Project layout and responsibilities
 
@@ -41,6 +59,11 @@ When adding source files or dependencies, update the relevant Docker allowlist
 and COPY paths if needed. Keep private files out of images.
 For docs-only edits, check links, images, copy, and `git diff --check`.
 Do not add new test or lint tooling just to satisfy an invented workflow.
+
+CI runs on pushes and PRs to `dev`/`main`, and manual dispatch, without path filters.
+Web builds before typechecking generated Next.js types; Python runs offline tests;
+Docker runs the synthetic four-service build/persistence/cleanup verifier.
+There is no lint script or CD job. Add deployment only after a target is agreed.
 
 ## Security and data
 

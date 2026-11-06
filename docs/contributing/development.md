@@ -21,7 +21,7 @@ in package.json/lockfile. Docker pins PostgreSQL 16.11 locally; broader version
 agreement and S0-03 approval remain open.
 
 ```sh
-npm ci --ignore-scripts
+npm ci
 npm run dev
 # Production: npm run build && npm run start
 npm run typecheck
@@ -57,7 +57,8 @@ explicit build/startup check, not a full e2e suite. It copies exact web files an
 two SVG assets to a system temporary directory without dotenv, builds/typechecks, checks Home
 HTTP/content, scans HTML and `.next/static` for an injected FAKE provider secret,
 then checks independent API HTTP liveness. Backend tests use fake env and mock
-dotenv. Install web dependencies with `npm ci --ignore-scripts` first.
+dotenv. Install web dependencies with `npm ci` first; lifecycle scripts prepare
+native build assets.
 The Linux verifier starts Next directly (not through npm), uses ephemeral
 loopback ports for both servers, rejects responses if its child exits during
 startup, and cleans up each owned process group with bounded waits. Port

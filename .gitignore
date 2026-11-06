@@ -4,3 +4,6 @@
 .openarms/logs/
 .openarms/.handoff-lock
 .env
+.venv/
+__pycache__/
+*.pyc

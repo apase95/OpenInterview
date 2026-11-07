@@ -2,6 +2,10 @@
 
 ## Các cổng nghiệm thu
 
+Local synthetic text/controller evidence and the failed bounded live evidence
+writer attempt are recorded in [AI verification](../ai/verification.md). These
+partial checks do not close any text, audio or production acceptance gate.
+
 Không ấn định lịch hoặc giá khi chưa có số liệu. Mỗi giai đoạn chỉ qua cổng khi có artifact và người chịu trách nhiệm duyệt.
 
 Active MVP desktop only, đúng [7 trang](../product/README.md): Home, Sign in, Roles, Join room, Interview, HR, Admin; một frame 1440/page type. Mobile/tablet/responsive OUT OF SCOPE. Không candidate profile/CV upload/change/share/version/history/settings portal; machine-derived profile artifact không là portal. Recording/export future OUT OF SCOPE, không controls/capture trong MVP. Chỉ kiểm tra desktop browsers; kiểm chứng tài liệu không chứng minh app đã chạy.

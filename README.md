@@ -27,6 +27,13 @@ This is an early scaffold: a static Home page, a FastAPI API, PostgreSQL,
 and an idle worker. It is not a working interview agent yet.
 Authentication, interview rooms, media, and report jobs are planned, not built.
 
+An opt-in [local voice conversation test](docs/contributing/development.md#opt-in-local-voice-conversation-test)
+now provides restricted developer tokens and a named STT → LLM → TTS worker.
+After one-time setup in that guide, `npm run test:voice` starts the API, named
+worker and isolated `/local-voice` frontend in one terminal; Ctrl+C stops them.
+It contacts cloud services and may cost money. This is not interview-controller
+integration or production readiness.
+
 ## Stack
 
 ### AI and voice

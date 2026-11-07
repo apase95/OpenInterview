@@ -17,6 +17,7 @@
 | [Kiến trúc và công nghệ](architecture/system-architecture.md) | Thành phần, triển khai, bảo mật và lựa chọn nhà cung cấp |
 | [Điều phối hội thoại](architecture/conversation-workflow.md) | Trạng thái, streaming, ngắt lời và FAQ |
 | [Hợp đồng I/O](architecture/io-contracts.md) | Nguồn vào, audio trả về, event/turn và xử lý gián đoạn |
+| [API/data contract v1](architecture/api-data-contract.md) | Shared technical baseline, generated OpenAPI, synthetic fixtures and guarded dev/test DB slice; domain routes not implemented |
 | [Artifact và vòng đời dữ liệu](architecture/data-artifacts.md) | Transcript, room CV private storage, quyền/retention; recording/export chỉ tương lai |
 | [Kế hoạch kiểm chứng](planning/validation-plan.md) | Các giai đoạn, ma trận kiểm thử, rủi ro và quyết định còn mở |
 | [Checklist triển khai theo vai trò](planning/implementation-checklist.md) | BA, DevOps, Fullstack Developer, AI Engineer: các việc cần làm cho MVP |

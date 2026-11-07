@@ -1,0 +1,29 @@
+.console { width: calc(100% - 32px); max-width: 480px; margin: 32px auto; padding: 24px; border: 1px solid #493557; border-radius: 20px; background: #140e1f; color: #f3edff; font-size: 14px; line-height: 1.5; }
+.console h1 { margin: 0; text-align: center; font-size: 26px; letter-spacing: -.6px; }
+.stage { display: grid; justify-items: center; gap: 14px; margin: 22px 0; }
+.robot { width: 72px; }
+.face { height: 48px; border: 2px solid #c9a8ed; border-radius: 16px; background: #1a102a; display: flex; align-items: center; justify-content: center; gap: 16px; }
+.face span { width: 6px; height: 12px; background: #d9b5ff; border-radius: 6px; }
+.robotBase { width: 40px; height: 4px; border-radius: 50%; background: #765196; margin: 8px auto 0; }
+.status { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
+.dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #c4a1ef; }
+.dot[data-connected="true"] { background: #8de5bf; }
+.field { display: block; font-size: 13px; font-weight: 600; }
+.field input { box-sizing: border-box; display: block; width: 100%; margin-top: 6px; min-height: 44px; border: 1px solid #79628d; border-radius: 8px; background: #0c0813; color: #f3edff; padding: 10px 12px; font: inherit; }
+.consent { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0; font-size: 12px; color: #cfc1df; cursor: pointer; }
+.consent input { flex-shrink: 0; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #b887f4; }
+.sessionActions, .audioActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sessionActions > button { flex: 1; }
+.console button { display: inline-flex; gap: 6px; align-items: center; justify-content: center; min-height: 44px; border: 1px solid #79628d; border-radius: 8px; background: #251b33; color: #f3edff; padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.console button.primary { background: #7635ce; border-color: #bd92ef; }
+.console button.danger { background: #351823; border-color: #ab6479; color: #ffd6e0; }
+.console button:disabled { opacity: .5; cursor: not-allowed; }
+.console button:not(:disabled):hover { filter: brightness(1.2); }
+.console button[aria-pressed="true"] { background: #47305f; border-color: #d6b3ff; }
+.console :is(button, input, summary):focus-visible { outline: 3px solid #e1caff; outline-offset: 3px; }
+.audioActions { margin-top: 12px; }
+.audioActions > button { flex: 1 1 auto; }
+.privacy { margin-top: 16px; color: #c4b9d2; font-size: 12px; }
+.privacy summary { cursor: pointer; min-height: 44px; display: list-item; align-content: center; color: #d9b5ff; }
+.privacy p { margin: 8px 0; }
+@media (max-width: 480px) { .console { box-sizing: border-box; margin: 16px auto; padding: 20px; } }

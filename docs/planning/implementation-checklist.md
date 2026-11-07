@@ -29,7 +29,8 @@ Phạm vi UI đúng [7 page types](../product/README.md): Home, Sign in, Roles, 
 - [ ] Phối hợp tạo `.env.example` chỉ có giá trị mẫu và `.gitignore` loại secret; provider key chỉ ở server/worker, không dùng tiền tố `NEXT_PUBLIC`.
 - [ ] Tạo database và user PostgreSQL với quyền cần thiết; cấu hình volume bền vững và phối hợp Fullstack chạy migration.
   - [x] Local PostgreSQL 16.11 provisioning: app role non-admin, authenticated TCP checks, named volume; synthetic row survives restart and down/up (`tests/verify_compose.py`).
-  - [ ] Application schema migrations and migration/rollback verification.
+  - [x] Dev/test contract SQL slice and guarded fixture seed; real isolated PostgreSQL migration checksum/idempotence/rollback, selected constraints and restart persistence (`tests/verify_seed.py`).
+  - [ ] Production migration upgrades, full schema/state/auth constraints, backup/restore and acceptance.
 - [ ] Tạo cấu hình LiveKit Cloud, credential và kết nối mạng cho API/worker/browser; không tự host media khi chưa có nhu cầu.
 - [x] Viết Dockerfile cho web Next.js, API FastAPI và worker dài hạn; explicit COPY, multi-stage, nonroot and runtime export checks passed locally.
 - [x] Viết `.dockerignore` để không đưa secret, cache và file không cần thiết vào build context; deny-by-default allowlist.
@@ -52,7 +53,9 @@ Phạm vi UI đúng [7 page types](../product/README.md): Home, Sign in, Roles, 
   - [x] Python-only credential validation and FAKE-secret public bundle/HTML scan; no real `.env` read during verification.
 - [ ] Nối cấu hình env và PostgreSQL; phối hợp DevOps về `.env.example`, kết nối local và migration.
 - [ ] Chốt API/Room/CVAttachment binding exact candidate + campaign + optional attachment ID/version/hash hoặc absence; server bounded PDF 5 MB configurable proposal, relationship/authority/scan validation; metadata guardrail không thêm FAQ status/action enum.
+  - [x] [Technical v1 baseline](../architecture/api-data-contract.md), generated OpenAPI and typed synthetic fixtures validated offline; domain routes, actual CV upload/scanner and authorized policy approval remain open.
 - [ ] Tạo migration cho campaign/FAQ version, session, consent, turns, facts/corrections, candidate questions/FAQ answers, report jobs và reports; có ràng buộc chống trùng.
+  - [x] Isolated dev/test JSONB snapshot + relational reference slice, guarded seed, exact rerun/conflict rollback, selected FK/immutability/unique constraints verified on PostgreSQL (`tests/verify_seed.py`). Not full production write API or worker recovery.
 - [ ] Làm auth và API kiểm tra quyền theo chiến dịch/phiên; candidate chỉ dùng phiên được cấp, operator không mặc nhiên đọc mọi nội dung.
 - [ ] Làm HR Campaigns tab tạo JD/đề xuất/approval/lock; Rooms tab tạo identity/campaign/schedule/optional HR CV và Publish invitation. Draft sửa được; publish/invite khóa binding kể cả absence; sai CV sau đó revoke/cancel + NEW room, không swap ongoing history. CV chỉ HR reference, không parse/score/prompt/evidence.
 - [ ] Làm Google sign-in không first-profile wizard, Roles assigned rooms embedded và Join room gộp notice/consent/devices/waiting/access errors; lưu notice/time/choice trước media, HR contact inline cho mismatch, không candidate CV download mặc định.
@@ -68,11 +71,15 @@ Phạm vi UI đúng [7 page types](../product/README.md): Home, Sign in, Roles, 
 
 ## AI Engineer
 
+- [x] Partial local text verification: shared bounded controller, synthetic cases and 20/20 offline artifacts; see [scope/results](../ai/verification-results.md). The first live writer failed; the separately authorized second run below records technical success only. Provider quality, human listening, integration and all broader items below remain open.
+
 - [ ] Cài LiveKit Agents Python và plugin tương thích; chốt phiên bản với DevOps, giữ worker chạy dài hạn.
 - [ ] Cấu hình STT phía server với baseline Deepgram Nova-3, `vi`; xác minh hỗ trợ tiếng Việt, streaming, quota và vùng hiện hành.
 - [ ] Cấu hình LLM phía server bằng Gemini Flash còn được hỗ trợ; xác minh model ID, region, quota và plugin trước khi dùng.
 - [ ] Cấu hình TTS phía server bằng ElevenLabs với voice tiếng Việt; baseline `eleven_flash_v2_5` cần xác minh khả dụng và hỗ trợ thực tế.
 - [ ] Thử từng provider bằng dữ liệu synthetic, sau đó nối STT → LLM → TTS; không coi tên baseline là bằng chứng đã hoạt động.
+  - [x] Direct-HTTPS functional evidence `20261107T130859Z-0d96004c`: ElevenLabs `eleven_flash_v2_5` generated three 24 kHz mono 16-bit WAVs with actual default voice `hpp4J3VqNfWAUOO0d1Us`; Deepgram `nova-3`/`vi` returned three batch transcripts; Gemini `gemini-3.5-flash-lite` returned two schema-valid, policy-accepted expected proposals. [Exact scope and observations](../ai/verification-results.md#second-authorized-live-run--technical-functional-success-not-quality-approval).
+  - [ ] Human listening, approved WER/Vietnamese quality, plugin streaming and full pipeline remain pending; name round-trip WER 44.44%, numbers/negation 0%, no approved threshold. Report model not tested.
 - [ ] Làm luồng text với campaign snapshot đã duyệt, câu hỏi lõi và schema quyết định theo hợp đồng đã chốt.
 - [ ] Làm controller kiểm tra action, criterion/evidence ID, thứ tự pha, deadline và giới hạn followup/làm rõ; quyết định sai phải fallback an toàn.
 - [ ] Xử lý skip, clarify, correction và end; lưu trạng thái cùng Fullstack để không chỉ giữ trong RAM, không tự điền dữ liệu thiếu.

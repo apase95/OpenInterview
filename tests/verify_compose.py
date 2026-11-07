@@ -18,6 +18,19 @@ ROOT = Path(__file__).resolve().parents[1]
 SENTINEL = 'FAKE_PROVIDER_SECRET_7b02e194'
 
 
+def assert_provider_environment(service, names):
+    livekit = {'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'}
+    expected = {'web': set(), 'api': livekit,
+                'worker': livekit | {'GOOGLE_API_KEY', 'DEEPGRAM_API_KEY', 'ELEVEN_API_KEY'}}
+    # Inspect all runtime names, not just the synthetic input: new secrets fail closed.
+    # GPG_KEY is the public Python signing key inherited from the base image.
+    provider_names = {name for name in names if name not in {'LOCAL_VOICE_SECRET', 'GPG_KEY'} and (
+        name.startswith(('LIVEKIT_', 'GOOGLE_', 'DEEPGRAM_', 'ELEVEN_'))
+        and name not in {'DEEPGRAM_MODEL', 'DEEPGRAM_LANGUAGE'}
+        or name.endswith(('_KEY', '_SECRET', '_TOKEN')))}
+    assert provider_names == expected[service], f'{service} provider environment policy mismatch'
+
+
 def port():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
@@ -101,9 +114,9 @@ def main():
                 container = compose('ps', '-q', service).stdout.decode().strip()
                 info = json.loads(run(['docker', 'inspect', container]).stdout)[0]
                 assert info['Config']['User'] not in ('', '0', 'root')
+                runtime_env = {value.split('=', 1)[0] for value in info['Config']['Env']}
+                assert_provider_environment(service, runtime_env)
                 if service in ('web', 'api'):
-                    runtime_env = {value.split('=', 1)[0] for value in info['Config']['Env']}
-                    assert not runtime_env.intersection({name for name in values if name.endswith('_KEY') or name == 'LIVEKIT_API_SECRET'})
                     bindings = info['HostConfig']['PortBindings']
                     assert bindings and all(binding['HostIp'] == '127.0.0.1' for entries in bindings.values() for binding in entries)
                 image = json.loads(run(['docker', 'image', 'inspect', info['Image']]).stdout)[0]
@@ -129,7 +142,7 @@ def main():
             assert len(networks) == 1
             network = json.loads(run(['docker', 'network', 'inspect', next(iter(networks))]).stdout)[0]
             assert network['Internal']
-            print('PASS loopback-only web/API, no DB host port, dedicated internal DB network, provider env absent from web/API', flush=True)
+            print('PASS loopback-only web/API, no DB host port, dedicated internal DB network; provider env: web none, API LiveKit only, worker existing providers', flush=True)
             compose('stop', 'worker')
             container = compose('ps', '-a', '-q', 'worker').stdout.decode().strip()
             state = json.loads(run(['docker', 'inspect', container]).stdout)[0]['State']

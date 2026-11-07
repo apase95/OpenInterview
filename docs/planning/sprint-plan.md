@@ -56,6 +56,7 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 - **Nghiệm thu:** ký duyệt trước thu dữ liệu, HR lawful basis trước CV upload; từ chối consent phiên dừng trước media; CV optional không chặn eligibility; mọi loại dữ liệu có quyền/retention rõ.
 
 - [ ] **S0-03 — Chốt API, event, state và version dữ liệu**
+  - [x] Technical v1 baseline: [contract](../architecture/api-data-contract.md), generated OpenAPI/Pydantic source, shared synthetic fixture and offline negative validation (`tests/test_contracts.py`). Domain HTTP/auth/controller remain unimplemented; recruiter/privacy approval and parent gate stay open.
 - **Vai trò chính:** Fullstack Developer; phối hợp AI Engineer, BA, DevOps.
 - **Tiền đề:** S0-01, S0-02.
 - **Phạm vi:**
@@ -103,7 +104,8 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 - [ ] **S1-02 — PostgreSQL và migration nguồn chuẩn**
   - [x] Local PostgreSQL 16.11, separate admin/app credentials, app role without superuser/createdb/createrole; real authenticated SELECT 1.
   - [x] Named volume: synthetic row survives postgres/API/worker restart and down/up without volume removal (`tests/verify_compose.py`).
-  - [ ] Domain schema migrations, constraints, seed/transaction/rollback verification; parent remains open.
+  - [x] Dev/test contract migration slice and guarded synthetic seed: checksum/idempotence, selected scoped FK/immutable binding/unique event/job/report constraints, transaction rollback and PostgreSQL restart proof (`tests/verify_seed.py`).
+  - [ ] Full production schema/state/auth enforcement, migration upgrades, backup/restore and authorized acceptance; parent remains open.
 - **Vai trò chính:** Fullstack Developer; phối hợp DevOps, AI Engineer.
 - **Tiền đề:** S1-01, S0-03.
 - **Phạm vi:**
@@ -114,6 +116,8 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 - **Nghiệm thu:** DB mới migrate thành công; duplicate event/job bị ngăn; ref sai phiên/version bị từ chối theo hợp đồng; restart dịch vụ giữ dữ liệu; user ứng dụng không có quyền quản trị không cần thiết.
 
 - [ ] **S1-03 — LiveKit Cloud và smoke provider phía server**
+  - [x] Bounded direct-HTTPS synthetic functional run `20261107T130859Z-0d96004c`: three ElevenLabs WAVs, three Deepgram `nova-3`/`vi` batch transcripts and two Gemini structured proposals accepted by the shared controller; [actual results and WER](../ai/verification-results.md#second-authorized-live-run--technical-functional-success-not-quality-approval).
+  - [ ] Plugin streaming/browser integration, approved Vietnamese quality thresholds and human listening remain unverified. Name round-trip WER is 44.44%; functional success is not a quality gate. Parent remains open.
 - **Vai trò chính:** AI Engineer; phối hợp DevOps, Fullstack Developer.
 - **Tiền đề:** S1-01, S0-02, S0-04.
 - **Phạm vi:**
@@ -166,6 +170,7 @@ Giữ nguyên 24 task IDs/checkboxes. UI đúng [7 page types](../product/README
 - **Nghiệm thu:** từ chối consent không thu turn/media; không recording/export; missing CV hợp lệ nhưng scan fail/unavailable/wrong identity chặn publish file/room; binding publish bất biến; token hết hạn/sai scope bị từ chối, không secrets trong response.
 
 - [ ] **S2-03 — Controller text và finalized persistence**
+  - [x] Shared pure Python controller and 20-case synthetic text harness implemented; 20/20 offline plus two narrowly instructed live Gemini proposal comparisons passed in run `20261107T130859Z-0d96004c`; [results](../ai/verification-results.md) retain the earlier failed writer attempt. No NLU, broad semantic/text-gate approval, media or durable transaction integration; parent remains open.
 - **Vai trò chính:** AI Engineer; phối hợp Fullstack Developer.
 - **Tiền đề:** S2-01, S2-02, S0-03.
 - **Phạm vi:**

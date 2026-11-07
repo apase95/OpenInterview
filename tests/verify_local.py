@@ -34,7 +34,7 @@ def available_port():
         return listener.getsockname()[1]
 
 
-def get_started(command, cwd, url):
+def get_started(command, cwd, url, checks=()):
     process = subprocess.Popen(command, cwd=cwd, env=ENV, stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, start_new_session=True)
     try:
@@ -50,6 +50,13 @@ def get_started(command, cwd, url):
                 time.sleep(0.2)
                 if process.poll() is not None:
                     raise AssertionError('Server exited during HTTP check')
+                for check_url, host, expected in checks:
+                    request = urllib.request.Request(check_url, headers={'Host': host})
+                    try:
+                        with urllib.request.urlopen(request, timeout=10) as checked:
+                            assert checked.status == expected
+                    except urllib.error.HTTPError as error:
+                        assert error.code == expected
                 return body
             except (urllib.error.URLError, TimeoutError):
                 if time.monotonic() > deadline:
@@ -83,12 +90,38 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / filename, target)
         # Keep traced packages inside the isolated root for standalone output too.
+        shutil.copytree(ROOT / 'app/local-voice', web / 'app/local-voice')
         shutil.copytree(ROOT / 'node_modules', web / 'node_modules', symlinks=True)
+        if '--dev' in sys.argv:
+            # No inherited provider variables or root dotenv. Edit source, then restart.
+            dev_env = {key: ENV[key] for key in ('PATH', 'HOME', 'SYSTEMROOT', 'NEXT_TELEMETRY_DISABLED') if key in ENV}
+            print('Isolated web: http://127.0.0.1:3000/local-voice (restart after edits)', flush=True)
+            # Fixed port: Next must fail rather than attach to an incremented port.
+            # Keep the isolated source until the child has fully stopped.
+            previous = signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+            process = subprocess.Popen(['node', str(web / 'node_modules/next/dist/bin/next'),
+                                        'dev', '--hostname', '127.0.0.1', '--port', '3000'],
+                                       cwd=web, env=dev_env)
+            try:
+                if process.wait():
+                    raise RuntimeError('Isolated frontend exited unsuccessfully')
+            except KeyboardInterrupt:
+                pass
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=1)
+                signal.signal(signal.SIGTERM, previous)
+            return
         run(['npm', 'run', 'build'], web)
         run(['npm', 'run', 'typecheck'], web)
         port = available_port()
         html = get_started(['node', str(web / 'node_modules/next/dist/bin/next'), 'start',
-                            '--hostname', '127.0.0.1', '--port', str(port)], web, f'http://127.0.0.1:{port}/')
+                            '--hostname', '127.0.0.1', '--port', str(port)], web, f'http://127.0.0.1:{port}/',
+                           [(f'http://127.0.0.1:{port}/local-voice', f'127.0.0.1:{port}', 404)])
         for text in ('Start with a', 'conversation.', 'View roles', 'I have an invitation', 'Voice interview', '/images/robot.svg'):
             assert text in html, text
         for text in ('>Example<', 'AI is speaking', '>Voice interviews in Vietnamese<', 'waveform'):
@@ -101,6 +134,14 @@ def main():
             if path.is_file():
                 assert SENTINEL.encode() not in path.read_bytes(), str(path)
         print('PASS production Home HTTP 200/content and fake-secret scan of HTML + .next/static')
+        port = available_port()
+        voice_url = f'http://127.0.0.1:{port}/local-voice'
+        voice_html = get_started(['node', str(web / 'node_modules/next/dist/bin/next'), 'dev',
+                                 '--hostname', '127.0.0.1', '--port', str(port)], web, voice_url,
+                                [(voice_url, 'remote.example:3000', 404)])
+        assert 'Local voice test' in voice_html and 'Deepgram' in voice_html
+        assert SENTINEL not in voice_html
+        print('PASS local-voice development HTTP 200, hostile Host 404, production 404')
     port = available_port()
     result = get_started([sys.executable, '-m', 'uvicorn', 'backend.api:app', '--host', '127.0.0.1', '--port', str(port)], ROOT, f'http://127.0.0.1:{port}/health')
     assert json.loads(result) == {'status': 'ok', 'service': 'api'}

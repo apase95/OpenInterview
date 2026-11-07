@@ -1,8 +1,4 @@
-livekit-agents
-livekit-plugins-deepgram
-livekit-plugins-google
-livekit-plugins-elevenlabs
-livekit-plugins-silero
+-r backend/requirements.txt
 python-dotenv
 pydantic
 aiohttp

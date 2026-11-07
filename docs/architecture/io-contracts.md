@@ -1,5 +1,11 @@
 # Hợp đồng đầu vào và đầu ra
 
+Technical v1 shapes, routes and implementation states now live in the
+[API/data contract](api-data-contract.md). This document remains the logical/media
+design; domain `/v1` routes are not implemented. Implemented HTTP routes are
+`/health`, `/ready`, and the separate development-only, gated `/local/voice`
+session endpoints described in the [development guide](../contributing/development.md).
+
 Đây là hợp đồng logic đề xuất cho MVP, chưa phải API, schema DB hay tính năng đã triển khai. Áp dụng [yêu cầu nghiệp vụ](../business/requirements.md), [điều phối](conversation-workflow.md) và [quy tắc artifact](data-artifacts.md). Không yêu cầu CV từ candidate; HR upload CV tùy chọn lúc tạo room. Không PSTN; quyết định tuyển thuộc con người. Desktop UI đúng [7 trang](../product/README.md), không candidate profile/CV portal. Recording/export future OUT OF SCOPE.
 
 ## Ranh giới dữ liệu

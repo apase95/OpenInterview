@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "description": "Fixed offline demo only, not a joinable invitation or real consent/approval. No retention policy is approved.",
+  "tenants": [{"id":"syn_tenant","name":"Synthetic Example Company"}],
+  "users": [
+    {"id":"syn_hr","tenant_id":"syn_tenant","email":"recruiter@example.com","name":"Synthetic recruiter","app_role":"recruiter","campaign_ids":["syn_campaign"]},
+    {"id":"syn_candidate","tenant_id":"syn_tenant","email":"candidate@example.com","name":"Synthetic candidate","app_role":"candidate","campaign_ids":[]}
+  ],
+  "campaigns": [{
+    "id":"syn_campaign","tenant_id":"syn_tenant","version":1,"career":"Backend",
+    "jd":"Synthetic support API role. Describe your own support experience. No real vacancy.",
+    "status":"approved","approved_by":"syn_hr","approved_at":"2026-01-01T08:00:00Z",
+    "time_budget_seconds":600,"followups_per_topic":2,"clarifications_per_session":3,
+    "questions":[{"id":"syn_core","criterion_id":"syn_support","text":"Bạn từng xử lý yêu cầu hỗ trợ như thế nào?"}],
+    "rubric":[{"id":"syn_support","description":"Self-reported support experience, partial without a concrete example."}],
+    "faq":[{"id":"syn_faq","version":1,"content":"Synthetic office opens Monday to Friday. No promise about future interview rounds.","effective_from":"2026-01-01T00:00:00Z","effective_to":"2026-02-01T00:00:00Z"}]
+  }],
+  "rooms": [
+    {"id":"syn_room_done","tenant_id":"syn_tenant","candidate_id":"syn_candidate","campaign_id":"syn_campaign","campaign_version":1,"status":"completed","opens_at":"2026-01-02T09:00:00Z","closes_at":"2026-01-02T10:00:00Z","timezone":"UTC","contact":"recruiter@example.com","cv_attachment":null,"published_at":"2026-01-01T09:00:00Z"},
+    {"id":"syn_room_ready","tenant_id":"syn_tenant","candidate_id":"syn_candidate","campaign_id":"syn_campaign","campaign_version":1,"status":"published","opens_at":"2026-01-03T09:00:00Z","closes_at":"2026-01-03T10:00:00Z","timezone":"UTC","contact":"recruiter@example.com","cv_attachment":null,"published_at":"2026-01-01T09:00:00Z"}
+  ],
+  "sessions": [{
+    "id":"syn_session","tenant_id":"syn_tenant","room_id":"syn_room_done",
+    "consent":{"notice_version":"notice_demo_v1_testing_only","choice":true,"recorded_at":"2026-01-02T09:00:00Z"},
+    "phase":"wrap","status":"ended","end_reason":"completed","input_version":2,
+    "started_at":"2026-01-02T09:00:01Z","ended_at":"2026-01-02T09:05:00Z","recording_status":"disabled"
+  }],
+  "turns": [
+    {"id":"syn_ask","tenant_id":"syn_tenant","session_id":"syn_session","event_id":"syn_event1","sequence":1,"occurred_at":"2026-01-02T09:00:03Z","input_version":1,"speaker":"assistant","kind":"question","finalized_text":"Bạn từng xử lý yêu cầu hỗ trợ như thế nào?","delivery_status":"confirmed_delivered","audio_start_ms":0,"audio_end_ms":2000},
+    {"id":"syn_answer","tenant_id":"syn_tenant","session_id":"syn_session","event_id":"syn_event2","sequence":2,"occurred_at":"2026-01-02T09:00:08Z","input_version":1,"speaker":"candidate","kind":"answer","finalized_text":"Tôi có một năm xử lý yêu cầu hỗ trợ.","delivery_status":"stt_final","audio_start_ms":3000,"audio_end_ms":7000},
+    {"id":"syn_corrected","tenant_id":"syn_tenant","session_id":"syn_session","event_id":"syn_event3","sequence":3,"occurred_at":"2026-01-02T09:00:14Z","input_version":2,"speaker":"candidate","kind":"correction","finalized_text":"Tôi xin sửa lại, tôi có hai năm xử lý yêu cầu hỗ trợ.","delivery_status":"stt_final","audio_start_ms":8000,"audio_end_ms":13000},
+    {"id":"syn_refusal","tenant_id":"syn_tenant","session_id":"syn_session","event_id":"syn_event4","sequence":4,"occurred_at":"2026-01-02T09:01:00Z","input_version":2,"speaker":"candidate","kind":"refusal","finalized_text":"Tôi không muốn chia sẻ lịch có thể bắt đầu lúc này.","delivery_status":"stt_final","audio_start_ms":55000,"audio_end_ms":59000},
+    {"id":"syn_faq_question","tenant_id":"syn_tenant","session_id":"syn_session","event_id":"syn_event5","sequence":5,"occurred_at":"2026-01-02T09:02:00Z","input_version":2,"speaker":"candidate","kind":"faq","finalized_text":"Có làm cuối tuần không?","delivery_status":"stt_final","audio_start_ms":115000,"audio_end_ms":119000}
+  ],
+  "corrections": [{"id":"syn_correction","tenant_id":"syn_tenant","session_id":"syn_session","target_turn_id":"syn_answer","replacement_turn_id":"syn_corrected","input_version":2,"created_at":"2026-01-02T09:00:14Z","reason":"Synthetic candidate correction; original preserved."}],
+  "questions": [{"id":"syn_question","tenant_id":"syn_tenant","session_id":"syn_session","turn_id":"syn_faq_question","text":"Có làm cuối tuần không?","topic":"syn_weekends","disposition":"answer","reason":"source_missing","action":"answer_faq"}],
+  "answers": [{"id":"syn_faq_answer","tenant_id":"syn_tenant","session_id":"syn_session","question_id":"syn_question","status":"unknown","confirmed_answer_turn_id":null,"source_versions":[],"followup_status":"pending_recruiter"}],
+  "jobs": [{"id":"syn_job","tenant_id":"syn_tenant","session_id":"syn_session","input_version":2,"status":"done","attempts":1,"lease_until":null}],
+  "reports": [{
+    "id":"syn_report","tenant_id":"syn_tenant","session_id":"syn_session","input_version":2,"report_version":1,"status":"draft",
+    "summary":"Synthetic candidate reports two years of support experience. No detailed example was collected. Recruiter verification is needed; this is not a hiring decision.",
+    "criteria":[{"field":"syn_support","value":"Self-reported support experience","collection_status":"supported","evidence_turn_ids":["syn_corrected"],"requirement_status":"partial","note":"Unverified self-report, not an external verification."}],
+    "facts":[
+      {"field":"syn_availability","value":null,"collection_status":"refused","evidence_turn_ids":["syn_refusal"]},
+      {"field":"syn_education","value":null,"collection_status":"not_collected","evidence_turn_ids":[]}
+    ],
+    "reviewer_id":null,"reviewed_at":null,"created_at":"2026-01-02T09:05:01Z","config_version":"synthetic_report_config_v1_no_provider_call"
+  }]
+}

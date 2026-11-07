@@ -7,6 +7,20 @@ from unittest.mock import patch
 
 
 class ContainerSmoke(unittest.TestCase):
+    def test_runtime_provider_policy(self):
+        from verify_compose import assert_provider_environment
+        livekit = {'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'}
+        providers = livekit | {'GOOGLE_API_KEY', 'DEEPGRAM_API_KEY', 'ELEVEN_API_KEY'}
+        for service, names in (('web', set()), ('api', livekit), ('worker', providers)):
+            assert_provider_environment(service, names | {'PATH', 'DATABASE_PASSWORD', 'LOCAL_VOICE_SECRET', 'GPG_KEY'})
+        for service, names in (('web', {'LIVEKIT_URL'}),
+                               ('api', livekit | {'GOOGLE_API_KEY'}),
+                               ('api', livekit | {'UNEXPECTED_API_SECRET'}),
+                               ('api', livekit - {'LIVEKIT_API_SECRET'}),
+                               ('worker', providers - {'DEEPGRAM_API_KEY'})):
+            with self.subTest(service=service, names=names), self.assertRaises(AssertionError):
+                assert_provider_environment(service, names)
+
     def test_readiness(self):
         from fastapi.testclient import TestClient
         from backend.api import app

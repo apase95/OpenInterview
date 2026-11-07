@@ -25,6 +25,16 @@ services:
       DATABASE_NAME: openinterview
       DATABASE_USER: openinterview
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in explicit --env-file}
+      APP_ENV: ${APP_ENV:-development}
+      LOCAL_VOICE_ENABLED: ${LOCAL_VOICE_ENABLED:-false}
+      LOCAL_VOICE_SECRET: ${LOCAL_VOICE_SECRET:-}
+      LOCAL_VOICE_ORIGINS: ${LOCAL_VOICE_ORIGINS:-http://127.0.0.1:3000}
+      LOCAL_VOICE_TOKEN_TTL: ${LOCAL_VOICE_TOKEN_TTL:-60}
+      LOCAL_VOICE_DURATION: ${LOCAL_VOICE_DURATION:-300}
+      LOCAL_VOICE_MAX_SESSIONS: ${LOCAL_VOICE_MAX_SESSIONS:-1}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
     depends_on:
       postgres: {condition: service_healthy}

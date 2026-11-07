@@ -173,8 +173,7 @@ async def main():
     print(f"{BOLD}============================================================={RESET}")
 
     if all_passed:
-        print(f"\n{GREEN}{BOLD}🎉 TẤT CẢ 4/4 PROVIDER ĐÃ XÁC THỰC THÀNH CÔNG!{RESET}")
-        print("Provider smoke passed only.")
+        print("Four limited checks passed: admin API, text stream, authentication, audio frames; not provider quality or pipeline verification.")
     else:
         print(f"\n{YELLOW}Lưu ý: Vui lòng kiểm tra lại các Secret Key bị lỗi trong .env và chạy lại script.{RESET}\n")
     print("Not validated: full pipeline, browser/WebRTC, STT, report, or Sprint 1 exit gate")

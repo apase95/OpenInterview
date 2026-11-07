@@ -22,6 +22,7 @@ class Config:
     deepgram_model: str = 'nova-3'
     deepgram_language: str = 'vi'
     elevenlabs_model: str = 'eleven_flash_v2_5'
+    elevenlabs_voice_id: str | None = None
 
 
 def load_config(*, load_file=True):
@@ -35,7 +36,7 @@ def load_config(*, load_file=True):
         raise ValueError('Invalid or missing: ' + ', '.join(invalid))
     values = {name.lower(): os.environ[name].strip() for name in names}
     for name in ('GEMINI_CONTROLLER_MODEL', 'GEMINI_REPORT_MODEL', 'DEEPGRAM_MODEL',
-                 'DEEPGRAM_LANGUAGE', 'ELEVENLABS_MODEL'):
+                 'DEEPGRAM_LANGUAGE', 'ELEVENLABS_MODEL', 'ELEVENLABS_VOICE_ID'):
         if name in os.environ:
             values[name.lower()] = os.environ[name]
     return Config(**values)

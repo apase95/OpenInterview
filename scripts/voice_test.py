@@ -99,6 +99,7 @@ def cleanup(children):
 
 def worker_output(process, registered):
     allowed = {REGISTERED, 'Local voice worker starting; registration pending.',
+               'Local voice recording failed; session stopped (details suppressed).',
                'Local voice worker failed (configuration, startup or connection failure).',
                'Local voice session stopped (timeout or service failure).'}
     for line in process.stdout:

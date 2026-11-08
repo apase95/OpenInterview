@@ -2,6 +2,8 @@ fastapi==0.121.2
 uvicorn==0.38.0
 python-dotenv==1.2.1
 psycopg[binary]==3.2.12
+Authlib==1.6.6
+httpx==0.28.1
 livekit-api==1.2.2
 livekit-agents==1.8.11
 livekit-plugins-deepgram==1.8.11

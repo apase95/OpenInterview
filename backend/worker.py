@@ -14,7 +14,8 @@ from backend.healthcheck import HEARTBEAT
 def voice_session(config):
     from livekit.agents import AgentSession, APIConnectOptions, SessionConnectOptions
     from livekit.plugins import deepgram, google, elevenlabs, silero
-    retry = APIConnectOptions(max_retry=2, retry_interval=1, timeout=10)
+    from backend.voice_diagnostics import RETRY_POLICY
+    retry = APIConnectOptions(**RETRY_POLICY)
     voice = {'voice_id': config.elevenlabs_voice_id} if config.elevenlabs_voice_id else {}
     return AgentSession(
         stt=deepgram.STT(model=config.deepgram_model, language=config.deepgram_language,
@@ -33,6 +34,7 @@ async def voice_job(ctx):
     logging.disable(logging.CRITICAL)
     from livekit.agents import Agent, AutoSubscribe, room_io
     session = None
+    recorder = None
     try:
         lease = json.loads(ctx.job.metadata)
         remaining = lease['deadline'] - time.time()
@@ -41,6 +43,13 @@ async def voice_job(ctx):
                 or not lease['identity'].startswith('participant_')):
             return
         session = voice_session(load_config(load_file=False))
+        if os.getenv('LOCAL_VOICE_METRICS') == 'true':
+            from backend.voice_latency import Recorder
+            try:
+                recorder = Recorder()
+                recorder.attach(session)
+            except OSError:
+                print('Voice metrics unavailable (details suppressed).', flush=True)
         stopped = asyncio.Event()
         session.on('close', lambda event: stopped.set())
         session.on('error', lambda event: stopped.set() if not event.error.recoverable else None)
@@ -63,7 +72,13 @@ async def voice_job(ctx):
             session.say('Xin chào! Đây là phiên thử hội thoại tiếng Việt, không phải đánh giá tuyển dụng.',
                         allow_interruptions=True)
             await stopped.wait()
+    except asyncio.CancelledError:
+        if recorder:
+            recorder.emit(kind='job_cancelled')
+        raise
     except Exception:
+        if recorder:
+            recorder.emit(kind='job_failure')
         print('Local voice session stopped (timeout or service failure).', flush=True)
     finally:
         if session:
@@ -71,6 +86,8 @@ async def voice_job(ctx):
                 await asyncio.wait_for(session.aclose(), timeout=5)
             except Exception:
                 pass
+        if recorder:
+            recorder.finish()
         ctx.shutdown(reason='local voice session ended')
 
 

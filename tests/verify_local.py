@@ -1,6 +1,12 @@
+# %%
 """Explicit local startup/build verification. No root .env or provider calls.
 
 Run with the backend test venv Python. Web is copied from an exact allowlist.
+Default mode builds and checks synthetic HTTP responses and public secret leaks.
+Dev mode instead keeps the copied web running for manual use until stopped;
+that page can reach a separately configured backend, so it is not a voice test.
+Temporary sources are removed on normal unwinding, not after an unhandled kill.
+These checks do not prove browser interaction, OAuth or production acceptance.
 """
 import json
 from contextlib import contextmanager, nullcontext
@@ -26,13 +32,16 @@ ENV.update(NEXT_TELEMETRY_DISABLED='1', GOOGLE_API_KEY=SENTINEL,
            GOOGLE_OAUTH_CLIENT_SECRET='FAKEGOOGLE_OAUTH_CLIENT_SECRET', AUTH_SESSION_SECRET='FAKE_AUTH_SESSION_SECRET')
 
 
+# %%
 def run(command, cwd):
+    """Run a bounded build check in the copied tree with the synthetic environment."""
     started = time.monotonic()
     subprocess.run(command, cwd=cwd, env=ENV, check=True, timeout=180)
     print(f'PASS {" ".join(command)} ({time.monotonic() - started:.2f}s)', flush=True)
 
 
 def available_port():
+    """Release a free loopback port for later use; it is not reserved against races."""
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0))
         return listener.getsockname()[1]
@@ -40,6 +49,7 @@ def available_port():
 
 @contextmanager
 def auth_stub():
+    """Serve one synthetic proxy response and close the owned HTTP server on exit."""
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200 if self.path == '/auth/proxy-smoke?probe=1' else 404)
@@ -58,7 +68,13 @@ def auth_stub():
         thread.join(timeout=1)
 
 
+# %%
 def get_started(command, cwd, url, checks=()):
+    """Check a short-lived server with suppressed output, then stop its process group.
+
+    Child-survival checks reduce false readiness from another listener after a
+    bind race; responses alone do not establish browser behavior.
+    """
     process = subprocess.Popen(command, cwd=cwd, env=ENV, stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, start_new_session=True)
     try:
@@ -108,10 +124,13 @@ def get_started(command, cwd, url, checks=()):
             process.wait(timeout=5)
 
 
+# %%
 def main():
+    """Copy allowed web inputs, then serve manually or run isolated build/HTTP checks."""
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix='openinterview-web-') as directory, (nullcontext() if '--dev' in sys.argv else auth_stub()) as stub_origin:
         web = Path(directory)
+        # Copy only named sources and dependencies, never the root dotenv or full tree.
         for filename in ('package.json', 'package-lock.json', 'tsconfig.json', 'next-env.d.ts',
                          'app/layout.tsx', 'app/page.tsx', 'app/globals.css',
                          'postcss.config.mjs', 'next.config.mjs',
@@ -133,6 +152,7 @@ def main():
             print('Isolated web: http://127.0.0.1:3000/local-voice (restart after edits)', flush=True)
             # Fixed port: Next must fail rather than attach to an incremented port.
             # Keep the isolated source until the child has fully stopped.
+            # Dev mode stops its direct child; an outer supervisor owns group cleanup.
             previous = signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
             process = subprocess.Popen(['node', str(web / 'node_modules/next/dist/bin/next'),
                                         'dev', '--hostname', '127.0.0.1', '--port', '3000'],
@@ -199,5 +219,6 @@ def main():
     print(f'PASS independent API HTTP /health; verification total {time.monotonic() - started:.2f}s')
 
 
+# %%
 if __name__ == '__main__':
     main()

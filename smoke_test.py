@@ -1,3 +1,11 @@
+# %%
+"""Opt-in live provider probes using environment settings and dotenv fallback.
+
+Running this file makes real network requests and generation may cost money.
+Reports status, counts and timing rather than credentials or response bodies.
+These four narrow checks do not validate a voice pipeline, STT or browser audio.
+Client contexts are closed where shown; this is not a disposable service sandbox.
+"""
 import asyncio
 import os
 import sys
@@ -12,7 +20,9 @@ CYAN = "\033[96m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
+# %%
 async def test_livekit() -> bool:
+    """List rooms through the admin API and close the client; do not create a room."""
     print(f"\n{BOLD}▶ 1. LiveKit admin API (list rooms; not WebRTC)...{RESET}")
     url = os.getenv("LIVEKIT_URL")
     api_key = os.getenv("LIVEKIT_API_KEY")
@@ -39,7 +49,9 @@ async def test_livekit() -> bool:
         print(f"  {RED}✖ LiveKit: {type(e).__name__}{RESET}")
         return False
 
+# %%
 async def test_gemini() -> bool:
+    """Request a real greeting and require nonempty streamed text, not text quality."""
     print(f"\n{BOLD}▶ 2. Kiểm tra Google Gemini (LLM Generation)...{RESET}")
     api_key = os.getenv("GOOGLE_API_KEY")
     model = os.getenv("GEMINI_CONTROLLER_MODEL", "gemini-3.5-flash-lite")
@@ -81,7 +93,9 @@ async def test_gemini() -> bool:
         print(f"  {RED}✖ Gemini: {type(e).__name__}{RESET}")
         return False
 
+# %%
 async def test_deepgram() -> bool:
+    """Check project-list authentication only; no audio is sent for transcription."""
     print(f"\n{BOLD}▶ 3. Deepgram authentication (not transcription)...{RESET}")
     api_key = os.getenv("DEEPGRAM_API_KEY")
 
@@ -106,7 +120,9 @@ async def test_deepgram() -> bool:
         print(f"  {RED}✖ Deepgram: {type(e).__name__}{RESET}")
         return False
 
+# %%
 async def test_elevenlabs() -> bool:
+    """Synthesize fixed text and count received frames without playing or saving audio."""
     print(f"\n{BOLD}▶ 4. Kiểm tra ElevenLabs Flash v2.5 (TTS Vietnamese)...{RESET}")
     api_key = os.getenv("ELEVEN_API_KEY")
     model = os.getenv("ELEVENLABS_MODEL", "eleven_flash_v2_5")
@@ -142,7 +158,9 @@ async def test_elevenlabs() -> bool:
         print(f"  {RED}✖ ElevenLabs: {type(e).__name__}{RESET}")
         return False
 
+# %%
 async def main():
+    """Load settings and run each live check with a separate bounded timeout."""
     from dotenv import load_dotenv
     load_dotenv()
     print(f"{BOLD}======================================================{RESET}")
@@ -179,5 +197,6 @@ async def main():
     print("Not validated: full pipeline, browser/WebRTC, STT, report, or Sprint 1 exit gate")
     return 0 if all_passed else 1
 
+# %%
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))

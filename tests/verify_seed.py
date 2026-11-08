@@ -1,4 +1,11 @@
-"""Opt-in PostgreSQL proof. Own disposable Docker container/volume; no dotenv/providers."""
+# %%
+"""Opt-in PostgreSQL proof. Own disposable Docker container/volume; no dotenv/providers.
+
+Requires Docker and may download a database image. Synthetic fixtures exercise
+guarded migrations, atomic seeding, selected SQL constraints and restart durability.
+Only this run's named container and volume are removed in finally, if Docker works.
+No real records are needed; this is not full production schema or security proof.
+"""
 import json
 import os
 from pathlib import Path
@@ -19,19 +26,23 @@ from backend.contracts import Bundle
 from backend.seed import TABLES, FIXTURE, MIGRATION, connect, migrate, seed
 
 
+# %%
 def main():
+    """Provision a disposable database and run guarded fixture checks as a non-admin."""
     start = time.monotonic()
     name = 'oi-seed-' + uuid.uuid4().hex[:12]
     volume = name + '-data'
     env = {k: os.environ[k] for k in ('PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'XDG_RUNTIME_DIR') if k in os.environ}
 
     def docker(*args, check=True):
+        """Capture Docker output and keep command failures free of credential details."""
         result = subprocess.run(['docker', *args], env=env, capture_output=True, timeout=90)
         if check and result.returncode:
             raise AssertionError('Docker command failed; output withheld')
         return result.stdout.decode().strip()
 
     def wait():
+        """Wait for the owned PostgreSQL listener using bounded connection attempts."""
         for _ in range(100):
             try:
                 with psycopg.connect(**admin) as c:
@@ -42,6 +53,7 @@ def main():
         raise AssertionError('isolated PostgreSQL did not become ready')
 
     def rejected(call):
+        """Require a validation or SQL failure; successful invalid operations fail proof."""
         try:
             call()
         except (ValueError, psycopg.Error):
@@ -49,6 +61,7 @@ def main():
         raise AssertionError('invalid operation accepted')
 
     def snapshot(c):
+        """Read ordered fixture data so rollback and unchanged reruns can be compared."""
         return {t: c.execute(sql.SQL('SELECT data FROM {} ORDER BY id').format(sql.Identifier(t))).fetchall() for t in TABLES}
 
     try:
@@ -58,6 +71,7 @@ def main():
         port = docker('port', name, '5432/tcp').rsplit(':', 1)[1]
         admin = dict(host='127.0.0.1', port=port, user='postgres', password='synthetic-admin-only', dbname='postgres', connect_timeout=1)
         wait()
+        # Admin credentials only create the database and restricted application role.
         with psycopg.connect(**admin, autocommit=True) as c:
             c.execute("CREATE ROLE synthetic_app LOGIN PASSWORD 'synthetic-app-only' NOSUPERUSER NOCREATEDB NOCREATEROLE")
             c.execute('CREATE DATABASE openinterview_test OWNER synthetic_app')
@@ -72,6 +86,7 @@ def main():
                 c.commit()
                 assert c.execute('SELECT rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles WHERE rolname=current_user').fetchone() == (False,)
                 c.commit()
+                # Alter temporary SQL copies to test guards without changing migration files.
                 with tempfile.TemporaryDirectory(prefix='oi-seed-sql-') as directory:
                     broken = Path(directory) / 'broken.sql'
                     broken.write_text(MIGRATION.read_text() + '\nSELECT nonexistent_contract_function();')
@@ -111,6 +126,7 @@ def main():
                 rejected(lambda: seed(c, invalid))
 
                 def bad_sql(statement, params=()):
+                    """Use a transaction so rejected constraint probes leave no partial writes."""
                     with c.transaction():
                         c.execute(statement, params)
 
@@ -134,6 +150,7 @@ def main():
                                         ('syn_tenant', 'syn_bad_correction', Jsonb({**correction, 'id':'syn_bad_correction','session_id':'syn_other'}))))
 
                 def cross_session():
+                    """Create valid alternate parents before probing the scoped correction key."""
                     with c.transaction():
                         # Both sessions and original turns exist: fail the scoped FK,
                         # not merely a missing global ID.
@@ -147,6 +164,7 @@ def main():
                 rejected(cross_session)
 
                 def non_synthetic():
+                    """Require seeding to refuse a database containing a non-synthetic marker."""
                     with c.transaction():
                         c.execute('INSERT INTO tenants VALUES (%s,%s)', ('real_marker', Jsonb({'id': 'real_marker', 'name': 'Non-synthetic guard marker'})))
                         seed(c, bundle)
@@ -186,5 +204,6 @@ def main():
     print(f'PASS PostgreSQL contract/seed proof ({time.monotonic() - start:.2f}s)')
 
 
+# %%
 if __name__ == '__main__':
     main()

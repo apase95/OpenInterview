@@ -1,4 +1,11 @@
-"""Opt-in auth-only supervisor. No voice workers, migrations or provider probes."""
+# %%
+"""Opt-in auth-only supervisor. No voice workers, migrations or provider probes.
+
+Uses private local configuration and an already provisioned auth database.
+Starts a loopback API and an isolated web copy; Google login needs user action.
+Child output is suppressed, and shutdown targets only started process groups.
+Readiness is not proof of a successful OAuth login or production security.
+"""
 import os
 import shutil
 import signal
@@ -9,7 +16,9 @@ import time
 from voice_test import ROOT, alive, check_ports, cleanup, http_ready, wait_ready, web_env
 
 
+# %%
 def preflight():
+    """Check local tools and auth schema without applying migrations or logging secrets."""
     python = ROOT / '.venv/bin/python'
     if os.name != 'posix':
         raise RuntimeError('Auth launcher requires POSIX process groups.')
@@ -24,7 +33,9 @@ def preflight():
     return python
 
 
+# %%
 def main():
+    """Supervise owned API/web sessions and restore the signal handler on exit."""
     children = []
     previous = signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
@@ -57,5 +68,6 @@ def main():
         signal.signal(signal.SIGTERM, previous)
 
 
+# %%
 if __name__ == '__main__':
     sys.exit(main())

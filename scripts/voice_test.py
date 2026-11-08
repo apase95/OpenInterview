@@ -1,4 +1,11 @@
-"""Opt-in POSIX voice supervisor. Never print config or arbitrary child output."""
+# %%
+"""Opt-in POSIX voice supervisor. Never print config or arbitrary child output.
+
+Uses private local settings and starts API, cloud-connected worker and web copy.
+Worker startup can register with cloud services; voice use may cost money.
+Only owned process groups are stopped here; remote cleanup belongs to the worker.
+Readiness does not prove browser audio delivery or provider quality.
+"""
 import os
 from pathlib import Path
 import shutil
@@ -14,11 +21,14 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTERED = 'Local voice worker registered; waiting for jobs.'
 
 
+# %%
 def web_env():
+    """Pass only basic OS paths to the web launcher, not provider credentials."""
     return {key: os.environ[key] for key in ('PATH', 'HOME', 'SYSTEMROOT') if key in os.environ}
 
 
 def preflight():
+    """Validate installed tools and local settings before any worker is launched."""
     python = ROOT / '.venv/bin/python'
     if os.name != 'posix':
         raise RuntimeError('This launcher requires POSIX process groups (Linux/macOS).')
@@ -46,7 +56,12 @@ assert 'http://127.0.0.1:3000' in origins
     return python
 
 
+# %%
 def check_ports():
+    """Probe loopback ports without stopping existing services.
+
+    Closing each probe releases its port, so startup still has a bind race.
+    """
     for port in (8000, 3000):
         with socket.socket() as probe:
             try:
@@ -56,6 +71,7 @@ def check_ports():
 
 
 def http_ready(url):
+    """Treat a direct HTTP 200 as readiness, not an end-to-end session check."""
     try:
         # Ignore proxy environment, including credentials embedded in proxy URLs.
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=1) as response:
@@ -65,12 +81,14 @@ def http_ready(url):
 
 
 def alive(children):
+    """Fail if any recorded child has exited; never inspect unrelated processes."""
     for name, process in children:
         if process.poll() is not None:
             raise RuntimeError(f'{name} exited unexpectedly; startup/session stopped. Check private configuration and setup instructions.')
 
 
 def wait_ready(children, ready, timeout=60):
+    """Bound readiness polling and recheck child survival after a positive probe."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         alive(children)
@@ -82,7 +100,9 @@ def wait_ready(children, ready, timeout=60):
     raise RuntimeError('Timed out waiting for readiness; check configuration, model download and provider connectivity.')
 
 
+# %%
 def cleanup(children):
+    """Signal owned POSIX groups, then force-stop survivors with bounded waits."""
     for sig in (signal.SIGTERM, signal.SIGKILL):
         for _, process in reversed(children):
             try:
@@ -98,6 +118,7 @@ def cleanup(children):
 
 
 def worker_output(process, registered):
+    """Forward only fixed safe status lines and signal observed registration."""
     allowed = {REGISTERED, 'Local voice worker starting; registration pending.',
                'Local voice recording failed; session stopped (details suppressed).',
                'Local voice worker failed (configuration, startup or connection failure).',
@@ -110,7 +131,9 @@ def worker_output(process, registered):
                 registered.set()
 
 
+# %%
 def main():
+    """Start owned sessions and clean them up on failure, Ctrl+C or SIGTERM."""
     children = []
     old_handler = signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
@@ -152,5 +175,6 @@ def main():
         signal.signal(signal.SIGTERM, old_handler)
 
 
+# %%
 if __name__ == '__main__':
     sys.exit(main())

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "test:voice": "python3 scripts/voice_test.py",
+    "test:auth": "python3 scripts/auth_test.py",
     "dev:local": "python3 tests/verify_local.py --dev",
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build --webpack",

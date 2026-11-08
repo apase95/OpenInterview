@@ -34,7 +34,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck
-      - run: node --test tests/voice-client.test.mjs
+      - run: node --test tests/voice-client.test.mjs tests/candidate-ui.test.mjs tests/auth-ui.test.mjs
 
   python:
     name: Python checks

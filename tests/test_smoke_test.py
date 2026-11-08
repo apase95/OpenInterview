@@ -1,3 +1,9 @@
+# %%
+"""Check provider-smoke orchestration without provider calls or dotenv reads.
+
+Async probe functions are replaced with success, failure and timeout results.
+This proves exit/report behavior, not full pipeline or browser readiness.
+"""
 import asyncio
 import contextlib
 import importlib.util
@@ -9,14 +15,18 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 
+# %%
 class SmokeTests(unittest.TestCase):
+    """Check placeholder rejection and privacy-safe smoke command outcomes."""
     def test_shared_placeholder_validation(self):
+        """Reject blank and template credentials while allowing a synthetic value."""
         from backend.config import is_placeholder
         for value in (None, '', '   ', 'short', 'sk_xxxxxxxxx', 'wss://your-project.livekit.cloud'):
             self.assertTrue(is_placeholder(value))
         self.assertFalse(is_placeholder(' synthetic-safe-value '))
 
     def test_main_offline(self):
+        """Mock every provider probe and require safe exits and explicit scope limits."""
         loader = Mock()
         dotenv = types.ModuleType("dotenv")
         dotenv.load_dotenv = loader

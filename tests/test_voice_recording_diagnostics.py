@@ -1,4 +1,10 @@
-"""Isolated offline error evidence; real SDK models, no provider calls."""
+# %%
+"""Check shared recording/latency diagnostics with real SDK error models.
+
+A fake model raises local errors through SDK retry machinery; fake session
+callbacks feed temporary capture files. Event indexes are not attempt counts,
+and these checks do not validate any provider connection or successful retry.
+"""
 import asyncio
 from contextlib import redirect_stdout, redirect_stderr
 import io
@@ -18,8 +24,11 @@ from livekit.agents.voice.events import ErrorEvent
 SECRET = 'credential-body-url-transcript-SENTINEL'
 
 
+# %%
 class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
+    """Check shared safe error payloads and first-failure ownership."""
     async def test_real_sdk_retries_forward_events_not_attempt_counts(self):
+        """Drive fake model timeouts through SDK retries and retain safe event evidence."""
         from livekit.agents import APIConnectOptions, llm
         from livekit.agents.voice.agent_activity import AgentActivity
         from backend.voice_latency import Recorder
@@ -61,6 +70,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(SECRET, json.dumps(recorder.rows))
 
     async def test_shared_payload_summary_and_first_failure(self):
+        """Feed SDK errors locally and require matching summaries without secret leakage."""
         from backend.voice_latency import Recorder
         from backend.voice_recording import Capture
         callbacks = {}

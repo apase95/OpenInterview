@@ -1,3 +1,9 @@
+# %%
+"""Check config validation, in-process health and idle worker lifecycle.
+
+Credentials are synthetic and dotenv loading is mocked. The worker check starts
+a real local scaffold subprocess, not a provider-connected voice worker.
+"""
 import os
 from pathlib import Path
 import select
@@ -13,8 +19,11 @@ FAKE = {name: 'synthetic-safe-value' for name in (
 FAKE['LIVEKIT_URL'] = 'wss://synthetic.invalid'
 
 
+# %%
 class BackendTests(unittest.TestCase):
+    """Check safe defaults, secret handling and local worker shutdown."""
     def test_config(self):
+        """Validate synthetic settings and redaction without reading a dotenv file."""
         from backend.config import load_config
         with patch.dict(os.environ, FAKE, clear=True):
             config = load_config(load_file=False)
@@ -29,6 +38,7 @@ class BackendTests(unittest.TestCase):
             loader.assert_called_once_with(Path(__file__).resolve().parents[1] / '.env', override=False)
 
     def test_health_without_credentials(self):
+        """Require in-process liveness to work without provider credentials."""
         from fastapi.testclient import TestClient
         from backend.api import app
         with patch.dict(os.environ, {}, clear=True):
@@ -37,6 +47,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(response.json(), {'status': 'ok', 'service': 'api'})
 
     def test_worker(self):
+        """Check local worker config exits, idle startup and SIGTERM cleanup."""
         command = [sys.executable, '-m', 'backend.worker', '--no-env-file']
         env = {**os.environ, **FAKE}
         checked = subprocess.run(command + ['--check-config'], env=env, capture_output=True, text=True, timeout=2)

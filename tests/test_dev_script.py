@@ -1,3 +1,9 @@
+# %%
+"""Check development shell command dispatch with fake Docker/Python binaries.
+
+The real shell script runs in a temporary path containing spaces. Recorded
+arguments prove dispatch and quoting, not Docker or test-suite success.
+"""
 import json
 import os
 from pathlib import Path
@@ -7,8 +13,11 @@ import tempfile
 import unittest
 
 
+# %%
 class DevScriptTests(unittest.TestCase):
+    """Check help, argument rejection, compose commands and interpreter selection."""
     def test_commands(self):
+        """Record fake executable calls and compare exact supported command arguments."""
         source = Path(__file__).resolve().parents[1] / 'scripts/dev.sh'
         self.assertTrue(source.is_file(), 'scripts/dev.sh must exist')
         with tempfile.TemporaryDirectory(prefix='contributor space ') as directory:

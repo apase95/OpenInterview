@@ -1,4 +1,9 @@
-"""Isolated offline error evidence; no recording dependency or provider calls."""
+# %%
+"""Check sanitized error evidence without recording or provider calls.
+
+Real SDK exception objects supply local error data; fake SDK constructors expose
+worker retry settings. Configured retry policy is not proof of actual recovery.
+"""
 import asyncio
 import json
 from types import SimpleNamespace as NS
@@ -10,8 +15,11 @@ from livekit.agents import APIStatusError, APITimeoutError
 SECRET = 'credential-body-url-transcript-SENTINEL'
 
 
+# %%
 class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
+    """Check strict diagnostic fields, bounded counts and shared worker policy."""
     async def test_sparse_invalid_and_bounded(self):
+        """Sanitize sparse/invalid events and bound admitted error indexes and counts."""
         from backend.voice_diagnostics import Diagnostics, sanitize_error
         for status in (-1, 600, True, '429', None):
             error = APIStatusError(SECRET, status_code=503)
@@ -34,6 +42,7 @@ class DiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(diagnostics.summary()['dropped'], 1)
 
     async def test_worker_policy_uses_reported_values(self):
+        """Inspect fake SDK constructors for the exact shared retry/error limits."""
         from backend.worker import voice_session
         from backend.voice_diagnostics import RETRY_POLICY
         agents = NS(AgentSession=Mock(), APIConnectOptions=Mock(), SessionConnectOptions=Mock())

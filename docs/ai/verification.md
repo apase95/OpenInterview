@@ -96,5 +96,119 @@ accuracy, pronunciation, intelligibility and any truncation. Do not treat audio
 bytes or a transcript as proof of listening. Accent/noise/echo/browser/barge-in,
 naturalness, fairness and end-to-end delivery need separate approved samples.
 
+## Voice latency observations (opt-in)
+
+Set `LOCAL_VOICE_METRICS=true` on the voice worker to write bounded, content-free
+`artifacts/ai/voice-<random-session-id>/events.jsonl` and `summary.json` at cleanup.
+Default is off. Metrics do not enable recording. No text, transcript, audio, provider request
+IDs, token counts, keys or exception strings are written by this recorder.
+Each process uses monotonic relative receipt times, not SDK wall timestamps.
+At most 2,048 events and 2,048 SDK speech-ID mappings are retained per session;
+overflow is counted. In-memory observations are lost on process crash.
+
+Verified installed SDK hooks: `metrics_collected` (deprecated but supported),
+`speech_created`, `SpeechHandle.add_done_callback`, `SpeechHandle.interrupted`,
+`error`, `close`. Only SDK `speech_id` joins metrics to speech handles; local
+integer turn IDs are not participant IDs, user utterance IDs or provider request
+IDs. STT/VAD without a join key remain session-level, never attached to the
+latest speech. `say` greetings may be the first measured speech.
+
+LLM TTFT is SDK first-token time; TTS TTFB is SDK first-byte time, not browser
+playback. STT streaming duration=0 is a placeholder and is excluded. EOU and
+transcription delay are SDK VAD-based estimates; zero can mean no detected speech
+end, not instantaneous latency. VAD inference total is not per-turn latency.
+Missing fields/types stay explicit. Median and p95 use observed nonnegative,
+finite values; p95 is nearest-rank `sorted[ceil(0.95 * n) - 1]`.
+Sample counts are metric-event counts, not independent user turns.
+First/subsequent cohorts use the first observed joined speech, **not cold/warm**.
+Interrupted speech and cancelled requests are excluded from stage summaries;
+unjoined errors cannot reliably invalidate a particular turn. Errors, job failure,
+job cancellation and SDK outcomes remain in events. `done_unverified` means only
+SDK speech completion, never successful browser delivery. These are descriptive
+observations, not success-only latency or an SLA. Streaming stages overlap:
+do not sum their durations or call their sum end-to-end latency.
+
+## Safe provider error evidence
+
+Metrics `error` events use safe fields, for example:
+
+```json
+{"component":"llm","category":"timeout","http_status":null,"recoverable":true,"retryable":true,"retry_count":null,"retry_evidence":"unavailable_in_sdk_event","observed_error_index":1}
+```
+
+Components are `llm`, `stt`, `tts`, `realtime`, or `unknown`. Categories are
+`timeout`, `connection`, `http_status`, `api`, `cancelled`, or `unknown`.
+Only typed exceptions determine category; messages and chained exceptions are not
+inspected. HTTP status is an integer 100–599 or null. Missing/non-boolean recovery
+and retryability fields are null, not false. No error text, label, source, class
+name, body, URL, request ID, stack or provider object is saved or printed.
+
+`summary.json` includes `provider_errors` (first safe error, counts by
+component/category/status/recoverable, observed total and dropped count).
+Counts retain at most 2,048 errors independently of the bounded event writer;
+overflow is explicit.
+
+The report records configured `retry_policy` once: `max_retry=2`,
+`retry_interval=1`, `timeout=10`. This is policy, **not observed retry count**.
+Installed SDK 1.8.11 forwards typed model errors through `ErrorEvent`; neither
+model errors nor session events expose an attempt index or operation ID.
+`observed_error_index` counts session errors, not retries or requests.
+`retry_count:null` / `unavailable_in_sdk_event` is intentional, even for recoverable
+errors. Recovery eligibility (`retryable`) differs from SDK recovery disposition
+(`recoverable`), and neither proves that the next attempt ran.
+
+Verified SDK loops: LLM, batch STT and TTS allow up to `max_retry + 1` attempts
+for eligible failures. Streaming STT resets its private recovery counter on
+provider progress, so this is not a lifetime retry cap. The first retry delay is
+actually 0.1 seconds, then configured interval (1 second), despite the SDK docstring
+saying immediate. Streaming TTS does not retry after partial audio; LLM can disable
+retry after visible chunks via its stream flag. LLM/TTS status 499 returns without
+an error event. Non-API exceptions are not generally retried. Timeout is a connection
+option, not an end-to-end session deadline. No private stream wrapping or tracing
+was added to infer exact counts.
+
+For the next consented synthetic run, enable the metrics flag, restart the worker,
+then End the session to finalize the new files. Existing artifacts are not upgraded.
+The old 11.005 s LLM TTFT and 40.456 s recoverable error do **not** establish a
+timeout or its cause.
+
+Offline smoke: `.venv/bin/python -m unittest discover -s tests -p test_voice_diagnostics.py`.
+
+## Small synthetic audio baseline
+
+```sh
+# Deterministic JSON plan only: no .env, provider imports, files or network:
+.venv/bin/python -m backend.voice_baseline
+# Explicit paid opt-in, reads .env; NOT run as part of verification:
+.venv/bin/python -m backend.voice_baseline --live
+.venv/bin/python -m unittest discover -s tests -p test_voice_latency.py
+```
+
+The live command warns before loading config or constructing providers. It uses
+the existing configured models/plugins, with three fixed Vietnamese name/number/
+negation inputs. Maximum 12 application requests, no SDK retries, 60 seconds per
+case (20-second connection options), 800 reply characters, 15 seconds/2 MB per
+audio clip. These local post-generation limits are **not billing caps**. Failed
+requests can cost money. No automatic retry. Failure exits nonzero with an
+incomplete report. Synthetic source WAVs and a safe configured-model manifest,
+per-stage observations, failures and count/median/nearest-rank p95 go under
+ignored `artifacts/ai/audio-baseline-<id>/`. Provider text/errors are not saved.
+
+This deliberately small baseline uses TTS-generated real audio -> **batch STT**
+-> streaming LLM -> streaming TTS, sequentially. It records first text chunk,
+first audio frame and completion separately. TTS receives completed LLM text;
+this is not a replica of the overlapped worker pipeline. It can locate a slow
+direct request stage, not compare batch STT against live endpointing. File
+duration includes possible silence and is not a speech-end timestamp. Speech
+end, endpointing, barge-in, browser playback and mouth-to-ear are unavailable.
+Generated synthetic audio is not human-accent/noise or quality validation.
+
+Offline checks cover real SDK LLM stream delivery before producer completion and
+error propagation with a fake provider, audio consumer incremental progress and
+budget rejection, worker recoverable/fatal error wiring and cleanup, sanitization,
+interruption/cancellation exclusion and bounded summaries. They do not prove
+provider plugin WebSocket streaming, worker audio scheduling, browser delivery or
+actual acoustic interruption. No live/paid baseline has been run for this change.
+
 See [actual results and blockers](verification-results.md). Full text/voice gates,
 semantic approval, durable state/report work and all sprint parents stay open.

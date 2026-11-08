@@ -23,9 +23,20 @@ All website UI is in English. Interview speech is in Vietnamese.
 
 ## Current status
 
-This is an early scaffold: a static Home page, a FastAPI API, PostgreSQL,
-and an idle worker. It is not a working interview agent yet.
-Authentication, interview rooms, media, and report jobs are planned, not built.
+This is an early scaffold with a connected, opt-in candidate demo at `/roles`,
+a FastAPI API, PostgreSQL, and an idle worker. The demo uses synthetic role
+labels and temporary rooms/sessions, not real interviews or authentication.
+Production authorization, interview media, and report jobs remain unimplemented.
+See [candidate demo setup](docs/contributing/development.md#candidate-demo-no-cloud-services).
+
+Google-only `/login` and `/signup` use the same-origin auth API. After private
+OAuth/PostgreSQL setup and an explicit auth migration, run `npm run test:auth`
+for the API and isolated frontend only (no voice worker).
+Run `.venv/bin/python -m backend.auth migrate --env-file .env` explicitly first,
+then `.venv/bin/python -m backend.auth check --env-file .env` to validate setup.
+See [auth quickstart](docs/contributing/development.md#google-sign-in-and-sign-up)
+and [Google auth setup](docs/contributing/google-auth.md). Real Google sign-in
+requires your credentials; offline checks do not prove a live OAuth flow.
 
 An opt-in [local voice conversation test](docs/contributing/development.md#opt-in-local-voice-conversation-test)
 now provides restricted developer tokens and a named STT → LLM → TTS worker.

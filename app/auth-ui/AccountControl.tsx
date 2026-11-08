@@ -27,6 +27,6 @@ export default function AccountControl() {
     } catch { setError('Could not sign out. Please try again.'); }
     finally { setBusy(false); }
   }
-  if (!account) return <a href="/login">Sign in</a>;
-  return <span className="account-control"><span className="account-name" title={account.user.email}>{typeof account.user.name === 'string' && account.user.name || account.user.email}</span><button disabled={busy} onClick={() => void signout()}>Sign out</button>{error && <span role="alert">{error}</span>}</span>;
+  if (!account) return <a className="inline-flex min-h-9 items-center text-sm leading-5 font-normal" href="/login">Sign in</a>;
+  return <span className="inline-flex items-center gap-2.5 text-sm leading-normal"><span className="max-w-[140px] truncate" title={account.user.email}>{typeof account.user.name === 'string' && account.user.name || account.user.email}</span><button className="min-h-9 border-0 bg-transparent text-inherit disabled:opacity-55" disabled={busy} onClick={() => void signout()}>Sign out</button>{error && <span role="alert">{error}</span>}</span>;
 }

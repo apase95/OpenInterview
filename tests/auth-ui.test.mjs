@@ -21,7 +21,10 @@ test('both auth intents render one Google action and a fixed safe return path', 
     const html = renderToStaticMarkup(React.createElement(Card, { intent }));
     assert.match(html, /Continue with Google/);
     assert.match(html, new RegExp(`return_to=/roles&amp;intent=${intent}`));
-    assert.equal((html.match(/class="google-button"/g) || []).length, 1);
+    assert.equal((html.match(/href="\/auth\/google\/start\?/g) || []).length, 1);
+    assert.match(html, /<main class="[^"]*grid[^"]*items-start justify-items-center/);
+    assert.match(html, /aria-labelledby="auth-title"/);
+    assert.match(html, /min-h-12 w-full/);
     assert.doesNotMatch(html, /<input|password|HR|Admin|localStorage/);
     assert.match(html, /Google shares your name and email/);
     assert.match(html, intent === 'signin' ? /href="\/signup"/ : /href="\/login"/);

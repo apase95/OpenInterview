@@ -7,7 +7,7 @@ FROM deps AS build
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY tsconfig.json next-env.d.ts next.config.mjs postcss.config.mjs ./
 COPY app/layout.tsx app/page.tsx app/globals.css ./app/
-COPY app/auth-ui/AccountControl.tsx app/auth-ui/AuthCard.tsx app/auth-ui/auth.css ./app/auth-ui/
+COPY app/auth-ui/AccountControl.tsx app/auth-ui/AuthCard.tsx ./app/auth-ui/
 COPY app/login/page.tsx ./app/login/
 COPY app/signup/page.tsx ./app/signup/
 COPY app/roles/page.tsx ./app/roles/

@@ -33,3 +33,23 @@ test('initial role selection has no premature progress or microphone request', (
   assert.match(html, /required=""/);
   assert.match(html, /No live AI/);
 });
+
+test('main UI uses static Tailwind dimensions and scoped headings, including narrow layouts', () => {
+  for (const path of ['../app/page.tsx', '../app/roles/page.tsx']) {
+    const html = renderPage(path);
+    assert.match(html, /<nav class="[^"]*min-h-12/);
+    assert.match(html, /class="[^"]*size-6[^"]*overflow-hidden/);
+    assert.match(html, /w-\[130\.4px\]/);
+    assert.match(html, /\[@media\(max-width:760px\)\]:/);
+  }
+  const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
+  assert.match(css, /@theme/);
+  assert.doesNotMatch(css, /\.hero|\.candidate|\.demo-nav|h1\s*\{|@apply/);
+  const auth = readFileSync(new URL('../app/auth-ui/AuthCard.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(auth, /import .*\.css/);
+  assert.match(auth, /\[@media\(max-width:480px\)\]:pt-12/);
+  assert.match(auth, /aria-disabled=\{pending\}/);
+  for (const path of ['../app/page.tsx', '../app/roles/page.tsx', '../app/auth-ui/AccountControl.tsx', '../app/local-voice/voice-client.tsx']) {
+    assert.doesNotMatch(readFileSync(new URL(path, import.meta.url), 'utf8'), /import .*\.css/);
+  }
+});

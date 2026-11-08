@@ -68,6 +68,7 @@ Vietnamese quality, and plugin compatibility still need testing.
 ### Application
 
 - Next.js App Router, TypeScript, and Tailwind CSS v4 for the website.
+  UI uses static utility classes; shared colors and the Arial font live in `app/globals.css` under `@theme`.
 - Python and FastAPI for the API and worker scaffold.
 - PostgreSQL and Docker Compose for the local stack.
 

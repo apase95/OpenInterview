@@ -35,6 +35,8 @@ async def voice_job(ctx):
     from livekit.agents import Agent, AutoSubscribe, room_io
     session = None
     recorder = None
+    capture = None
+    recording = False
     try:
         lease = json.loads(ctx.job.metadata)
         remaining = lease['deadline'] - time.time()
@@ -42,7 +44,10 @@ async def voice_job(ctx):
                 or not ctx.job.room.name.startswith('local_voice_')
                 or not lease['identity'].startswith('participant_')):
             return
-        session = voice_session(load_config(load_file=False))
+        from backend.voice_recording import approved
+        recording = approved(lease)
+        config = load_config(load_file=False)
+        session = voice_session(config)
         if os.getenv('LOCAL_VOICE_METRICS') == 'true':
             from backend.voice_latency import Recorder
             try:
@@ -51,32 +56,59 @@ async def voice_job(ctx):
             except OSError:
                 print('Voice metrics unavailable (details suppressed).', flush=True)
         stopped = asyncio.Event()
+        if recording:
+            from pathlib import Path
+            from backend.voice_recording import Capture
+            capture = Capture(Path('artifacts/ai'), {
+                name: getattr(config, name) for name in ('deepgram_model', 'deepgram_language',
+                    'gemini_controller_model', 'elevenlabs_model', 'elevenlabs_voice_id')}, stopped.set)
+            capture.manifest['metrics_session_id'] = recorder.path.name if recorder else None
+            capture.attach(session)
         session.on('close', lambda event: stopped.set())
         session.on('error', lambda event: stopped.set() if not event.error.recoverable else None)
         ctx.add_shutdown_callback(session.aclose)
         async with asyncio.timeout(max(0, lease['deadline'] - time.time())):
             await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-            if json.loads(ctx.room.metadata).get('ended'):
+            room_lease = json.loads(ctx.room.metadata)
+            if room_lease.get('ended'):
                 return
+            if room_lease.get('recording', False) != lease.get('recording', False):
+                raise ValueError('Recording lease mismatch')
             await asyncio.wait_for(ctx.wait_for_participant(identity=lease['identity']), timeout=min(30, remaining))
-            await session.start(
-                agent=Agent(instructions=(
+            instructions = (
                     'Bạn là trợ lý thử hội thoại tiếng Việt. Đây chỉ là thử nghiệm giọng nói, '
                     'không phải phỏng vấn hay đánh giá tuyển dụng. Trả lời ngắn gọn. '
-                    'Không bịa chính sách nhân sự hoặc công ty. Không yêu cầu dữ liệu riêng tư.')),
+                    'Không bịa chính sách nhân sự hoặc công ty. Không yêu cầu dữ liệu riêng tư.')
+            if capture:
+                from backend.voice_recording import recording_agent
+                agent = recording_agent(capture, instructions)
+            else:
+                agent = Agent(instructions=instructions)
+            await session.start(
+                agent=agent,
                 room=ctx.room, record=False,
                 room_options=room_io.RoomOptions(participant_identity=lease['identity'],
                     audio_input=True, audio_output=True, video_input=False,
                     text_input=False, text_output=False, close_on_disconnect=True,
                     delete_room_on_close=False))
+            if capture:
+                await asyncio.wait_for(capture.ready.wait(), timeout=5)
+                if not getattr(capture, 'output_attached', False) or capture.failure:
+                    raise RuntimeError('Recording setup failed')
             session.say('Xin chào! Đây là phiên thử hội thoại tiếng Việt, không phải đánh giá tuyển dụng.',
                         allow_interruptions=True)
             await stopped.wait()
     except asyncio.CancelledError:
+        if capture:
+            capture.fail('job_cancelled')
         if recorder:
             recorder.emit(kind='job_cancelled')
         raise
     except Exception:
+        if recording and capture is None:
+            print('Local voice recording failed; session stopped (details suppressed).', flush=True)
+        if capture:
+            capture.fail('job_failure_or_timeout')
         if recorder:
             recorder.emit(kind='job_failure')
         print('Local voice session stopped (timeout or service failure).', flush=True)
@@ -85,7 +117,13 @@ async def voice_job(ctx):
             try:
                 await asyncio.wait_for(session.aclose(), timeout=5)
             except Exception:
+                if capture:
+                    capture.fail('session_close_failure')
                 pass
+        if capture:
+            await capture.aclose()
+            if capture.failure:
+                print('Local voice recording failed; session stopped (details suppressed).', flush=True)
         if recorder:
             recorder.finish()
         ctx.shutdown(reason='local voice session ended')

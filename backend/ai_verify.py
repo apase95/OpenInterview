@@ -1,4 +1,11 @@
-"""Repeatable synthetic verification. Import/default execution never loads dotenv."""
+# %%
+"""Repeatable synthetic verification. Import/default execution never loads dotenv.
+
+The default run writes fixture decisions and a pending listening review locally.
+Only --live loads server configuration and permits paid, bounded HTTPS probes:
+three TTS clips, three batch STT calls and two LLM calls, without retries.
+Passing cases does not approve audio quality or browser/media integration.
+"""
 import argparse
 import asyncio
 from dataclasses import fields, asdict, is_dataclass
@@ -21,7 +28,9 @@ FIXTURE = ROOT / 'fixtures/ai/cases.json'
 BASE = ROOT / 'fixtures/synthetic/v1.json'
 
 
+# %%
 def json_default(value):
+    """Encode supported evidence dates and dataclasses; reject other objects."""
     if isinstance(value, (date, datetime)):
         return value.isoformat()
     if is_dataclass(value):
@@ -34,6 +43,7 @@ def write_json(path, value):
 
 
 def listening_review(output, audio):
+    """Write review placeholders, linking only WAV files already present locally."""
     lines = ['# Listening review', '', 'Reviewer: PENDING', 'Date: PENDING',
              'Human listening: PENDING — no listening or quality approval claimed.', '']
     for clip in audio:
@@ -46,7 +56,9 @@ def listening_review(output, audio):
     (output / 'listening-review.md').write_text('\n'.join(lines), encoding='utf-8')
 
 
+# %%
 def campaign():
+    """Load the synthetic campaign and replace FAQ wording with approved content."""
     c = Bundle.model_validate_json(BASE.read_text()).campaigns[0]
     # Separate fixture content approval: never use arbitrary campaign wording.
     from backend.controller import FAQ
@@ -59,6 +71,7 @@ def normalize(text):
 
 
 def error_rate(gold, actual):
+    """Return word edit distance per reference word, not a quality acceptance gate."""
     a, b = normalize(gold), normalize(actual)
     row = list(range(len(b) + 1))
     for i, x in enumerate(a, 1):
@@ -70,6 +83,10 @@ def error_rate(gold, actual):
 
 
 def execute(case, proposal_override=None):
+    """Compare a deterministic controller result with the case's explicit expectations.
+
+    An override tests proposal handling, not a live model or hiring outcome.
+    """
     c = campaign()
     now = case.get('now', '2026-01-02T09:00:00+00:00')
     if isinstance(now, str):
@@ -102,7 +119,9 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# %%
 async def live(output):
+    """Load live configuration only on request and return safe setup failure metadata."""
     # Only this explicit server-side path may read the real env file.
     from backend.config import load_config
     from backend.ai_verify_live import probe
@@ -113,7 +132,9 @@ async def live(output):
     return await probe(config, output, json.loads(FIXTURE.read_text()))
 
 
+# %%
 def main():
+    """Run offline checks first, then optional probes, and write checksummed evidence."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--output-dir', type=Path)
@@ -160,5 +181,6 @@ def main():
     return 0 if all(r['passed'] for r in rows) and provider['status'] in ('not_requested','passed') else 1
 
 
+# %%
 if __name__ == '__main__':
     raise SystemExit(main())

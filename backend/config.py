@@ -1,7 +1,14 @@
+# %%
+"""Build server-side voice configuration from environment values on demand.
+
+Import does not load dotenv or contact providers. Placeholder checks help setup
+but do not prove that credentials are valid or remote services are reachable.
+"""
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Reject obvious setup placeholders, not every possible invalid credential.
 def is_placeholder(value):
     if not value:
         return True
@@ -9,6 +16,8 @@ def is_placeholder(value):
     return 'xxxx' in value or 'your-project' in value or len(value) < 8
 
 
+# %%
+# Hide required credentials from repr while retaining existing provider defaults.
 @dataclass(frozen=True)
 class Config:
     livekit_url: str = field(repr=False)
@@ -25,6 +34,9 @@ class Config:
     elevenlabs_voice_id: str | None = None
 
 
+# %%
+# Optional dotenv loading preserves existing environment values. Errors name
+# missing credentials without printing them; optional overrides are not validated.
 def load_config(*, load_file=True):
     if load_file:
         from dotenv import load_dotenv

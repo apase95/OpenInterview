@@ -1,3 +1,10 @@
+# %%
+"""Serve health probes and opt-in local demo and voice routes.
+
+Demo capabilities contain synthetic, process-local state. Voice uses remote room
+leases, but its lock and rate counter remain local to each process. The auth
+router is independent; specified v1 domain operations are not mounted here.
+"""
 import asyncio
 from collections import deque
 from contextlib import asynccontextmanager, suppress
@@ -21,6 +28,9 @@ voice_lock = asyncio.Lock()
 attempts = deque()
 
 
+# %%
+# Validate the development gate, loopback origins and bounded lease settings.
+# This checks configuration shape, not whether remote credentials work.
 def voice_settings():
     if os.getenv('LOCAL_VOICE_ENABLED') != 'true' or os.getenv('APP_ENV') != 'development':
         raise HTTPException(404, 'Not found')
@@ -45,6 +55,7 @@ def voice_settings():
     return secret, origins, ttl, duration, limit
 
 
+# Callers own this short-timeout client and must close it after remote operations.
 def voice_api():
     import aiohttp
     from livekit.api import LiveKitAPI
@@ -52,6 +63,7 @@ def voice_api():
                       os.environ['LIVEKIT_API_SECRET'], timeout=aiohttp.ClientTimeout(total=5))
 
 
+# Limit the JWT to one room and microphone publishing, without agent management.
 def voice_token(room, identity, ttl):
     from livekit.api import AccessToken, VideoGrants
     return (AccessToken(os.environ['LIVEKIT_API_KEY'], os.environ['LIVEKIT_API_SECRET'])
@@ -62,6 +74,8 @@ def voice_token(room, identity, ttl):
                                      can_manage_agent_session=False)).to_jwt())
 
 
+# Cleanup failures propagate so issuance cannot assume uncertain capacity is free.
+# Only prefixed rooms are managed; their metadata must contain a valid lease.
 async def clean_rooms(client):
     """Room metadata is the lease; retain ended reservations until JWT expiry."""
     from livekit import api
@@ -85,6 +99,8 @@ async def clean_rooms(client):
     return remaining
 
 
+# %%
+# Best-effort cleanup supplements mandatory reconciliation during issuance.
 async def reap_voice():
     while True:
         await asyncio.sleep(1)
@@ -102,6 +118,7 @@ async def reap_voice():
             pass
 
 
+# Own the optional reaper task and cancel it on application shutdown.
 @asynccontextmanager
 async def lifespan(app):
     task = asyncio.create_task(reap_voice()) if os.getenv('LOCAL_VOICE_ENABLED') == 'true' else None
@@ -114,6 +131,7 @@ async def lifespan(app):
                 await task
 
 
+# %%
 app = FastAPI(lifespan=lifespan)
 from backend.auth import router as auth_router, boundary as auth_boundary
 app.include_router(auth_router)
@@ -127,6 +145,9 @@ DEMO_ROLES = [{'role_id': key, 'name': name} for key, name in (
     ('frontend', 'Frontend'), ('backend', 'Backend'), ('ai', 'AI Engineer'))]
 
 
+# %%
+# Restrict synthetic routes to explicit development mode, loopback and fixed
+# frontend origins. Bodies are bounded before downstream JSON parsing.
 @app.middleware('http')
 async def candidate_demo_boundary(request: Request, call_next):
     if not request.url.path.startswith('/demo/'):
@@ -162,6 +183,7 @@ async def candidate_demo_boundary(request: Request, call_next):
                             status_code=error.status_code if isinstance(error, HTTPException) else 403, headers=headers)
 
 
+# An unexpired random ID is a demo capability, not an account identity.
 def demo_resource(store, key):
     resource = store.get(key)
     if not resource or resource['expires_at'] <= time.time():
@@ -169,6 +191,7 @@ def demo_resource(store, key):
     return resource
 
 
+# Require a JSON object; routes separately check the exact allowed fields.
 async def demo_body(request):
     try:
         body = await request.json()
@@ -179,11 +202,13 @@ async def demo_body(request):
         raise HTTPException(422, 'Invalid demo input') from None
 
 
+# Return the fixed synthetic catalog without database or provider access.
 @app.get('/demo/roles')
 async def demo_roles():
     return DEMO_ROLES
 
 
+# Remove expired capabilities before enforcing the process-local room limit.
 @app.post('/demo/rooms')
 async def create_demo_room(request: Request):
     body = await demo_body(request)
@@ -200,11 +225,14 @@ async def create_demo_room(request: Request):
     return room
 
 
+# Missing and expired room capabilities share the same lookup failure.
 @app.get('/demo/rooms/{room_id}')
 async def get_demo_room(room_id: str):
     return demo_resource(demo_rooms, room_id)
 
 
+# Require acknowledgement and reuse any session already bound to this room,
+# including an ended one. No real media or interview service is started.
 @app.post('/demo/rooms/{room_id}/sessions')
 async def create_demo_session(room_id: str, request: Request):
     body = await demo_body(request)
@@ -220,11 +248,13 @@ async def create_demo_session(room_id: str, request: Request):
     return session
 
 
+# Session visibility ends at its inherited room expiry.
 @app.get('/demo/sessions/{session_id}')
 async def get_demo_session(session_id: str):
     return demo_resource(demo_sessions, session_id)
 
 
+# Repeatable termination preserves the first synthetic end time.
 @app.post('/demo/sessions/{session_id}/end')
 async def end_demo_session(session_id: str):
     session = demo_resource(demo_sessions, session_id)
@@ -233,6 +263,9 @@ async def end_demo_session(session_id: str):
     return session
 
 
+# %%
+# Voice requests add a separate bearer secret to loopback and origin checks.
+# This is a local testing boundary, not Google session authorization.
 @app.middleware('http')
 async def local_voice_boundary(request: Request, call_next):
     if not request.url.path.startswith('/local/voice/'):
@@ -269,6 +302,8 @@ async def local_voice_boundary(request: Request, call_next):
                             headers={'Cache-Control': 'no-store'})
 
 
+# Consent fields must exactly match recording mode. Reconcile remote leases
+# under the local lock before creating a room; reject caller-controlled metadata.
 @app.post('/local/voice/sessions')
 async def start_voice(request: Request):
     from livekit import api
@@ -320,6 +355,8 @@ async def start_voice(request: Request):
             await client.aclose()
 
 
+# Disconnect participants but retain the ended reservation until its deadline.
+# A remote failure cannot confirm termination; the caller is told to stop media.
 @app.post('/local/voice/sessions/{session_id}/end')
 async def end_voice(session_id: str):
     from livekit import api
@@ -341,12 +378,15 @@ async def end_voice(session_id: str):
             await client.aclose()
 
 
+# %%
+# Process liveness is intentionally separate from database readiness.
 @app.get('/health')
 def health():
     """Liveness only; does not check DB or providers."""
     return {'status': 'ok', 'service': 'api'}
 
 
+# Probe only the database, withholding connection exception details from clients.
 @app.get('/ready')
 def ready():
     try:

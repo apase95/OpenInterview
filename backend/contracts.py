@@ -1,4 +1,10 @@
-"""Offline v1 contract source. No routes, credentials, or provider imports."""
+# %%
+"""Offline v1 contract source. No routes, credentials, or provider imports.
+
+Models validate resource shapes and synthetic bundle relationships. They do not
+implement runtime authorization, persistence, upload scanning or media delivery.
+The explicit entrypoint generates the specified-only OpenAPI contract offline.
+"""
 import json
 from datetime import datetime
 from pathlib import Path
@@ -7,12 +13,16 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, model_validator
 
 
+# Accept aware zero-offset timestamps only; no timezone conversion is performed.
 def utc(value):
     if value.utcoffset() is None or value.utcoffset().total_seconds() != 0:
         raise ValueError('UTC timestamp required')
     return value
 
 
+# %%
+# Shared wire limits keep identifiers, text and references bounded. Email uses
+# a basic shape check rather than mailbox verification.
 ID = Annotated[str, Field(pattern=r'^[a-z][a-z0-9_\-]{2,79}$')]
 Text = Annotated[str, Field(min_length=1, max_length=4000)]
 Email = Annotated[str, Field(pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$', max_length=254)]
@@ -22,21 +32,25 @@ Refs = Annotated[list[ID], Field(max_length=100)]
 Collection = Literal['not_collected', 'refused', 'insufficient_evidence', 'supported']
 
 
+# Unknown fields fail rather than being silently dropped from contract payloads.
 class Model(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+# Tenant ownership is carried on resources; runtime access control is separate.
 class Resource(Model):
     schema_version: Literal['1.0'] = '1.0'
     id: ID
     tenant_id: ID
 
 
+# Tenant identity anchors the cross-resource checks in a synthetic bundle.
 class Tenant(Model):
     id: ID
     name: Text
 
 
+# Declared roles and campaign assignments are data, not an authorization service.
 class User(Resource):
     email: Email
     name: Text
@@ -44,17 +58,20 @@ class User(Resource):
     campaign_ids: Refs
 
 
+# Rubric entries are referenced by core questions and report assessments.
 class Criterion(Model):
     id: ID
     description: Text
 
 
+# A criterion binding supplies structure, not approval of spoken wording.
 class CoreQuestion(Model):
     id: ID
     criterion_id: ID
     text: Text
 
 
+# Versioned source content is valid only within its strictly increasing UTC window.
 class FAQSource(Model):
     id: ID
     version: Version
@@ -69,6 +86,9 @@ class FAQSource(Model):
         return self
 
 
+# %%
+# Snapshot validation checks unique IDs, rubric bindings and approval metadata.
+# Structural approval does not prove that a human reviewed the actual content.
 class Campaign(Resource):
     version: Version
     career: Literal['BA', 'DevOps', 'Fullstack', 'Frontend', 'Backend', 'AI Engineer']
@@ -99,6 +119,7 @@ class Campaign(Resource):
         return self
 
 
+# Attachment fields describe scanning state without implementing file handling.
 class CVBinding(Model):
     """Metadata only; uploading/storage/scanning are not implemented."""
     id: ID
@@ -110,6 +131,8 @@ class CVBinding(Model):
     authority_notice_ref: Text
 
 
+# Non-draft rooms require publication metadata and an available scan if attached.
+# Bundle validation adds campaign/candidate bindings and synthetic CV absence.
 class Room(Resource):
     candidate_id: ID
     campaign_id: ID
@@ -133,12 +156,16 @@ class Room(Resource):
         return self
 
 
+# A notice version and recorded choice are evidence fields, not a legal assessment.
 class Consent(Model):
     notice_version: Text
     choice: bool
     recorded_at: UTC
 
 
+# %%
+# Refusal ends before interview start; terminal fields must agree with status.
+# Recording is explicitly disabled in this contract, unlike local voice tooling.
 class Session(Resource):
     room_id: ID
     consent: Consent
@@ -172,6 +199,8 @@ class Session(Resource):
         return self
 
 
+# Delivery labels are supplied evidence. Validation checks speaker/label and
+# offset consistency but cannot itself observe browser playback or STT accuracy.
 class Turn(Resource):
     session_id: ID
     event_id: ID
@@ -194,6 +223,7 @@ class Turn(Resource):
         return self
 
 
+# Append replacement provenance instead of mutating the original turn record.
 class Correction(Resource):
     session_id: ID
     target_turn_id: ID
@@ -203,6 +233,8 @@ class Correction(Resource):
     reason: Text
 
 
+# Supported values require cited turns; absent/refused values must remain null.
+# Bundle checks determine whether those citations belong to the input snapshot.
 class Fact(Model):
     field: ID
     value: Text | None
@@ -220,6 +252,7 @@ class Fact(Model):
         return self
 
 
+# Keep restricted/deferred questions distinct from source-based FAQ outcomes.
 class CandidateQuestion(Resource):
     session_id: ID
     turn_id: ID
@@ -243,11 +276,14 @@ class CandidateQuestion(Resource):
         return self
 
 
+# Pin a source version rather than relying on whichever content is current later.
 class SourceRef(Model):
     id: ID
     version: Version
 
 
+# An answered record needs source and delivery evidence in the enclosing bundle;
+# unavailable answers instead carry recruiter followup metadata.
 class FAQAnswer(Resource):
     session_id: ID
     question_id: ID
@@ -257,6 +293,8 @@ class FAQAnswer(Resource):
     followup_status: Literal['none', 'pending_recruiter']
 
 
+# %%
+# Only processing jobs carry a lease. This model does not run or reclaim workers.
 class ReportJob(Resource):
     session_id: ID
     input_version: Version
@@ -271,6 +309,7 @@ class ReportJob(Resource):
         return self
 
 
+# Missing evidence cannot be represented as fulfilled candidate ability.
 class Assessment(Fact):
     requirement_status: Literal['fulfilled', 'partial', 'missing']
     note: Text
@@ -282,6 +321,7 @@ class Assessment(Fact):
         return self
 
 
+# Review metadata records an actor and time, not a hiring decision or audit proof.
 class Report(Resource):
     session_id: ID
     input_version: Version
@@ -304,6 +344,10 @@ class Report(Resource):
         return self
 
 
+# %%
+# Validate a synthetic dataset as a whole: tenant/session references, event
+# uniqueness, correction provenance and report evidence must agree. These checks
+# are offline fixture constraints, not database isolation or live authorization.
 class Bundle(Model):
     schema_version: Literal['1.0']
     synthetic: Literal[True]
@@ -336,6 +380,7 @@ class Bundle(Model):
                 if group != 'tenants' and row.tenant_id not in maps['tenants']:
                     raise ValueError('tenant missing')
 
+        # Resolve within the owner's tenant and, where present, session boundary.
         def ref(group, key, owner):
             target = maps[group].get(key)
             if target is None or target.tenant_id != owner.tenant_id:
@@ -348,6 +393,7 @@ class Bundle(Model):
             room = ref('rooms', session.room_id, session)
             return ref('campaigns', room.campaign_id, room)
 
+        # Only candidate turns visible and not superseded at this version qualify.
         def evidence(ids, owner, version):
             for key in ids:
                 turn = ref('turns', key, owner)
@@ -466,6 +512,8 @@ class Bundle(Model):
         return self
 
 
+# %%
+# Stable public error shapes must not be filled with private resource details.
 class Error(Model):
     schema_version: Literal['1.0'] = '1.0'
     code: Literal['unauthenticated', 'forbidden', 'not_found', 'version_conflict',
@@ -474,11 +522,13 @@ class Error(Model):
     request_id: ID
 
 
+# Request models describe accepted wire fields, not implemented HTTP handlers.
 class ConsentRequest(Model):
     notice_version: Text
     choice: bool
 
 
+# A future join capability response; this model neither signs nor verifies JWTs.
 class TokenResponse(Model):
     schema_version: Literal['1.0'] = '1.0'
     session_id: ID
@@ -488,14 +538,17 @@ class TokenResponse(Model):
     expires_at: UTC
 
 
+# Candidate termination cannot select internal failure or completion reasons.
 class EndRequest(Model):
     reason: Literal['candidate_end']
 
 
+# Review notes are bounded text; permission checks belong to a future handler.
 class ReviewRequest(Model):
     note: Text
 
 
+# Domain identity includes tenant scope separately from independent Google login.
 class Me(Model):
     schema_version: Literal['1.0'] = '1.0'
     id: ID
@@ -505,6 +558,7 @@ class Me(Model):
     csrf_token: Text
 
 
+# Creation input binds a campaign version; Room and Bundle add lifecycle checks.
 class RoomCreate(Model):
     candidate_email: Email
     candidate_name: Text
@@ -517,15 +571,18 @@ class RoomCreate(Model):
     cv_attachment: CVBinding | None
 
 
+# Initial input is not yet an approved question/rubric snapshot.
 class CampaignCreate(Model):
     career: Literal['BA', 'DevOps', 'Fullstack', 'Frontend', 'Backend', 'AI Engineer']
     jd: Annotated[str, Field(min_length=1, max_length=16000)]
 
 
+# Select the snapshot version being approved, without changing its content here.
 class ApprovalRequest(Model):
     version: Version
 
 
+# References and version identify an append-only correction request.
 class CorrectionRequest(Model):
     target_turn_id: ID
     replacement_turn_id: ID
@@ -533,6 +590,7 @@ class CorrectionRequest(Model):
     reason: Text
 
 
+# Collect report context for inspection; no cross-resource validator is added here.
 class ReportDetail(Model):
     schema_version: Literal['1.0'] = '1.0'
     report: Report
@@ -545,6 +603,8 @@ class ReportDetail(Model):
     answers: list[FAQAnswer]
 
 
+# Events describe ordering and optional turn/generation evidence, not transport
+# delivery guarantees or an implemented event stream.
 class Event(Model):
     schema_version: Literal['1.0'] = '1.0'
     event_id: ID
@@ -559,6 +619,7 @@ class Event(Model):
                     'candidate_agreed_defer', 'candidate_end', 'connection_failed'] | None
 
 
+# %%
 # method, path, request, response, scope; all domain operations remain unimplemented.
 ROUTES = [
     ('get', '/v1/me', None, Me, 'signed-in account'),
@@ -581,6 +642,9 @@ ROUTES = [
 ]
 
 
+# %%
+# Assemble schemas without mounting routes or contacting services. Security and
+# concurrency headers specify future obligations, not working enforcement here.
 def openapi_document():
     from pydantic import TypeAdapter
     components = {}
@@ -634,6 +698,7 @@ def openapi_document():
                 'sessionCookie': {'type': 'apiKey', 'in': 'cookie', 'name': '__Host-oi_session'}}}}
 
 
+# %%
 if __name__ == '__main__':
     # Explicit offline code generation; committed artifact checked byte-structurally in tests.
     target = Path(__file__).resolve().parents[1] / 'docs/contracts/openapi-v1.json'

@@ -1,3 +1,4 @@
+# %%
 """Pure text policy gate. Confirmed intents come from a trusted upstream adapter.
 
 No NLU, media, persistence or production content approval is implemented here.
@@ -21,6 +22,9 @@ FOLLOWUP = 'Trong ví dụ đó, bạn trực tiếp phụ trách phần nào?'
 UNKNOWN = 'Mình chưa có thông tin được xác nhận. Mình ghi câu hỏi để tuyển dụng kiểm tra. Bạn muốn tiếp tục hay dừng?'
 
 
+# %%
+# Intent classification and source selection are trusted adapter inputs, not NLU
+# performed here. Text alone does not establish a confirmed intent.
 class Input(Model):
     turn_id: ID
     text: Text
@@ -29,6 +33,7 @@ class Input(Model):
     source_refs: list[SourceRef] = Field(default_factory=list, max_length=20)
 
 
+# A schema-valid proposal still needs policy checks before it can affect output.
 class Proposal(Model):
     action: Action
     criterion: ID | None = None
@@ -37,6 +42,9 @@ class Proposal(Model):
     question: Text | None = None
 
 
+# %%
+# Caller-owned session state is copied per decision; persistence and concurrent
+# update control belong to the caller, not this in-memory policy gate.
 @dataclass
 class State:
     deadline: datetime
@@ -52,6 +60,7 @@ class State:
     results: dict = field(default_factory=dict, repr=False, compare=False)
 
 
+# Return selected wording and next state, not proof of media delivery.
 @dataclass
 class Decision:
     action: Action
@@ -61,6 +70,10 @@ class Decision:
     state: State
 
 
+# %%
+# Safety and lifecycle gates precede cached replay. Reused turn IDs with different
+# payloads fail when replay is reached. Only reviewed catalog text may be spoken;
+# a structurally approved campaign alone does not approve arbitrary wording.
 def decide(c: Campaign, state: State, event: Input, now: datetime, proposal=None):
     import copy
     s = copy.deepcopy(state)

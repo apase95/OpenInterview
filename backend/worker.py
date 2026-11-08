@@ -1,3 +1,10 @@
+# %%
+"""Run an idle worker scaffold or an explicitly selected local voice worker.
+
+Voice mode uses paid providers with server-only configuration and bounded leases.
+Metrics and private recording are separate opt-ins; SDK/cloud recording stays off.
+This conversation test does not assess candidates or confirm browser playback.
+"""
 import argparse
 import asyncio
 import signal
@@ -11,7 +18,13 @@ from backend.database import ping
 from backend.healthcheck import HEARTBEAT
 
 
+# %%
 def voice_session(config):
+    """Build the configured STT/LLM/TTS pipeline with VAD and shared retry policy.
+
+    ElevenLabs logging is explicitly disabled and Deepgram opts out of MIP.
+    Retry settings are policy, not observed retry counts or recovery guarantees.
+    """
     from livekit.agents import AgentSession, APIConnectOptions, SessionConnectOptions
     from livekit.plugins import deepgram, google, elevenlabs, silero
     from backend.voice_diagnostics import RETRY_POLICY
@@ -29,7 +42,14 @@ def voice_session(config):
                                           tts_conn_options=retry, max_unrecoverable_errors=1))
 
 
+# %%
 async def voice_job(ctx):
+    """Validate a short local lease and bind audio to its named participant.
+
+    Disable Python logging to avoid provider text in SDK logs. Optional metrics
+    use safe allowlists; consented capture contains private text/audio instead.
+    Cleanup closes the session before draining capture and freezing metrics.
+    """
     import logging
     logging.disable(logging.CRITICAL)
     from livekit.agents import Agent, AutoSubscribe, room_io
@@ -64,6 +84,7 @@ async def voice_job(ctx):
                     'gemini_controller_model', 'elevenlabs_model', 'elevenlabs_voice_id')}, stopped.set)
             capture.manifest['metrics_session_id'] = recorder.path.name if recorder else None
             capture.attach(session)
+        # These callbacks stop the job; recoverable errors do not count retries.
         session.on('close', lambda event: stopped.set())
         session.on('error', lambda event: stopped.set() if not event.error.recoverable else None)
         ctx.add_shutdown_callback(session.aclose)
@@ -113,6 +134,7 @@ async def voice_job(ctx):
             recorder.emit(kind='job_failure')
         print('Local voice session stopped (timeout or service failure).', flush=True)
     finally:
+        # Session callbacks may still fire during close, before recorders finalize.
         if session:
             try:
                 await asyncio.wait_for(session.aclose(), timeout=5)
@@ -129,7 +151,9 @@ async def voice_job(ctx):
         ctx.shutdown(reason='local voice session ended')
 
 
+# %%
 def voice_server():
+    """Register the local test job; server connection retries are separate policy."""
     from livekit.agents import AgentServer
     from livekit.plugins import silero  # Register VAD download hook for download-files.
     server = AgentServer(max_retry=2, num_idle_processes=0)
@@ -137,7 +161,9 @@ def voice_server():
     return server
 
 
+# %%
 async def idle():
+    """Maintain a heartbeat until a stop signal; this scaffold processes no jobs."""
     stopped = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -161,7 +187,13 @@ async def idle():
     print('Worker stopped.', flush=True)
 
 
+# %%
 def main():
+    """Select voice mode explicitly, otherwise validate config and run the scaffold.
+
+    Configuration checks do not test providers. The voice wrapper preserves a
+    failed exit status when the SDK CLI catches a server startup/run exception.
+    """
     if '--voice' in sys.argv:
         import logging
         # SDK debug/error records can include provider text; no transcript logs in this mode.
@@ -214,5 +246,6 @@ def main():
         asyncio.run(idle())
 
 
+# %%
 if __name__ == '__main__':
     main()

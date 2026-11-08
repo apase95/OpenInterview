@@ -1,4 +1,10 @@
-"""Bounded, content-free SDK observations; never infer delivery success."""
+# %%
+"""Bounded, content-free SDK observations; never infer delivery success.
+
+Only allowlisted numeric SDK fields and sanitized errors enter local reports.
+Turn identifiers become session-local numbers; no transcript or context is saved.
+SDK completion is not browser playback, mouth-to-ear timing or proof of recovery.
+"""
 import json
 import math
 import statistics
@@ -8,6 +14,7 @@ from collections import Counter
 from pathlib import Path
 from backend.voice_diagnostics import Diagnostics, RETRY_POLICY
 
+# %%
 FIELDS = {
     'llm_metrics': ('ttft', 'duration'),
     'tts_metrics': ('ttfb', 'duration', 'audio_duration'),
@@ -17,13 +24,17 @@ FIELDS = {
 }
 
 
+# %%
 def stats(values):
+    """Summarize a nonempty numeric sample using median and nearest-rank p95."""
     values = sorted(values)
     return {'count': len(values), 'median': statistics.median(values),
             'p95': values[math.ceil(len(values) * .95) - 1]}
 
 
+# %%
 class Recorder:
+    """Own bounded in-memory observations and write them once at session cleanup."""
     def __init__(self, root=Path('artifacts/ai'), limit=2048):
         self.path = root / ('voice-' + uuid.uuid4().hex)
         self.path.mkdir(parents=True)
@@ -36,6 +47,7 @@ class Recorder:
         self.diagnostics = Diagnostics(limit)
 
     def turn(self, raw):
+        """Map SDK speech IDs to bounded local numbers without persisting raw IDs."""
         if not raw:
             return None
         if raw not in self.ids and len(self.ids) < self.limit:
@@ -52,6 +64,7 @@ class Recorder:
         self.rows.append(row)
 
     def metric(self, event):
+        """Admit finite nonnegative allowlisted values, excluding STT placeholders."""
         metric = event.metrics
         kind = metric.type
         if kind not in FIELDS:
@@ -69,6 +82,7 @@ class Recorder:
                   outcome='cancelled' if getattr(metric, 'cancelled', False) else 'observed', values=values)
 
     def speech(self, event):
+        """Observe handle completion; done remains unverified delivery evidence."""
         handle = event.speech_handle
         turn = self.turn(handle.id)
         self.emit(kind='speech_created', turn=turn)
@@ -76,6 +90,7 @@ class Recorder:
             outcome='interrupted' if speech.interrupted else 'done_unverified'))
 
     def attach(self, session):
+        """Register session callbacks whose later writes stop after finish."""
         session.on('metrics_collected', self.metric)
         session.on('speech_created', self.speech)
         def error(event):
@@ -85,6 +100,11 @@ class Recorder:
         session.on('close', lambda event: self.emit(kind='close'))
 
     def finish(self):
+        """Freeze observations and write summaries, excluding cancelled/interrupted turns.
+
+        Missing fields stay missing; errors count observations, not actual retries.
+        Attached callbacks are not removed, but emit ignores events after finish.
+        """
         if self.finished:
             return
         self.finished = True

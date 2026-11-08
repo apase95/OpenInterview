@@ -161,7 +161,9 @@ async def start_voice(request: Request):
         body = await request.json()
     except ValueError:
         raise HTTPException(422, 'Consent required') from None
-    if body != {'consent': True} or type(body.get('consent')) is not bool:
+    recording = os.getenv('LOCAL_VOICE_RECORDING') == 'true'
+    expected = {'consent': True, 'recording_consent': True} if recording else {'consent': True}
+    if body != expected or any(type(value) is not bool for value in body.values()):
         raise HTTPException(422, 'Consent true required; no other fields accepted')
     async with voice_lock:
         now = time.time()
@@ -174,6 +176,7 @@ async def start_voice(request: Request):
         room = PREFIX + secrets.token_hex(16)
         identity = 'participant_' + secrets.token_hex(16)
         lease = {'deadline': now + duration, 'identity': identity, 'ended': False}
+        lease['recording'] = 'local-pipeline-v1' if recording else False
         try:
             if len(await clean_rooms(client)) >= limit:
                 raise HTTPException(429, 'Local session capacity reached')
@@ -191,7 +194,7 @@ async def start_voice(request: Request):
             token = voice_token(room, identity, effective_ttl)
             return {'session_id': room, 'room': room, 'identity': identity, 'token': token,
                     'url': os.environ['LIVEKIT_URL'], 'expires_at': issued_at + effective_ttl,
-                    'ends_at': lease['deadline'], 'recording': False}
+                    'ends_at': lease['deadline'], 'recording': recording}
         except HTTPException:
             raise
         except Exception:

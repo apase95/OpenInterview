@@ -11,6 +11,7 @@ const local = () => ['localhost', '127.0.0.1', '[::1]'].includes(window.location
 export default function VoiceClient() {
   const [secret, setSecret] = useState('');
   const [consent, setConsent] = useState(false);
+  const [recordingConsent, setRecordingConsent] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [busy, setBusy] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
@@ -30,7 +31,7 @@ export default function VoiceClient() {
       return response;
     };
     const client = new VoiceSession({
-      issue: async (key: string) => (await post(API, key, JSON.stringify({ consent: true }))).json(),
+      issue: async (key: string, recording: boolean) => (await post(API, key, JSON.stringify(recording ? { consent: true, recording_consent: true } : { consent: true }))).json(),
       end: async (id: string, key: string, keepalive: boolean) => { await post(`${API}/${encodeURIComponent(id)}/end`, key, undefined, keepalive); },
       status: (text: string) => { if (mounted) { setStatus(text); setBusy(client.busy); } },
       room: (disconnected: () => void) => {
@@ -80,11 +81,12 @@ export default function VoiceClient() {
     </div>
     <label className={styles.field}>Local access secret <input type="password" autoComplete="off" value={secret} disabled={busy} onChange={event => setSecret(event.target.value)} /></label>
     <label className={styles.consent}><input type="checkbox" checked={consent} disabled={busy} onChange={event => setConsent(event.target.checked)} /><span>I consent to microphone use and sending audio/text to LiveKit, Deepgram, Google Gemini and ElevenLabs. Synthetic, non-sensitive data only.</span></label>
+    <label className={styles.consent}><input type="checkbox" checked={recordingConsent} disabled={busy} onChange={event => setRecordingConsent(event.target.checked)} /><span>Local debug recording (requires server flag): I consent to saving user and AI audio, finalized STT text, model input and AI text locally. Sensitive files remain until manually deleted. Leave unchecked when recording is disabled.</span></label>
     <div className={styles.sessionActions}>
       <button className={styles.primary} disabled={busy || !consent || !secret} onClick={() => {
         if (!local()) { setStatus('Loopback access required'); return; }
         setMicMuted(false); setSpeakerMuted(false); muted.current = false;
-        void session.current?.start(consent, secret); setSecret('');
+        void session.current?.start(consent, secret, recordingConsent); setSecret('');
       }}><span aria-hidden="true">▶</span> {status === 'Starting' ? 'Starting…' : 'Start session'}</button>
       <button className={styles.danger} disabled={!busy} onClick={() => { void session.current?.end(); }}>{status.includes('End not confirmed') ? 'Retry End' : 'End'}</button>
     </div>
@@ -104,7 +106,7 @@ export default function VoiceClient() {
       }}><span aria-hidden="true">◖</span> {speakerMuted ? 'Unmute speaker' : 'Mute speaker'}</button>
       <button disabled={!busy} onClick={async () => { try { await roomRef.current?.startAudio(); } catch { setStatus('Audio blocked. Check browser permissions, then try Enable audio again.'); } }}>Enable audio</button>
     </div>
-    <details className={styles.privacy}><summary>Data &amp; privacy</summary><p>Microphone audio passes through LiveKit to Deepgram. Transcribed text goes to Google Gemini; speech text goes to ElevenLabs. Voice audio returns through LiveKit.</p><p>No hiring evaluation, app recording or transcript persistence. Providers may retain data under their terms and account settings; zero retention is not guaranteed.</p></details>
+    <details className={styles.privacy}><summary>Data &amp; privacy</summary><p>Microphone audio passes through LiveKit to Deepgram. Transcribed text goes to Google Gemini; speech text goes to ElevenLabs. Voice audio returns through LiveKit.</p><p>No hiring evaluation. App recording and transcript persistence are off by default. When enabled on the server, separate recording consent is required. Replay is a worker-side estimate, not proof of browser playback. Providers may retain data under their terms and account settings; zero retention is not guaranteed.</p></details>
     <div ref={audio} />
   </main>;
 }

@@ -2,9 +2,9 @@
 export class VoiceSession {
   constructor(io) { this.io = io; this.owner = null; }
   get busy() { return this.owner !== null; }
-  start(consent, secret) {
+  start(consent, secret, recordingConsent = false) {
     if (!consent || !secret || this.busy) return Promise.resolve();
-    const owner = { secret, stopped: false };
+    const owner = { secret, recordingConsent, stopped: false };
     this.owner = owner;
     this.io.status('Starting');
     owner.pending = this.run(owner);
@@ -12,7 +12,8 @@ export class VoiceSession {
   }
   async run(o) {
     try {
-      o.lease = await this.io.issue(o.secret);
+      o.lease = await this.io.issue(o.secret, o.recordingConsent);
+      if (o.lease.recording === true && !o.recordingConsent) throw Error();
       if (o.stopped) return;
       const remaining = o.lease.ends_at * 1000 - Date.now();
       if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 600000) throw Error();

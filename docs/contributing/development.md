@@ -189,11 +189,13 @@ server lease expiry remains the fallback. Secret/token are never stored or shown
 Protocol used by the local client:
 
 - POST `/local/voice/sessions`, `Authorization: Bearer <local secret>`, exact
-  allowed `Origin`, JSON `{"consent":true}` and no other fields. OPTIONS allows
+  allowed `Origin`, JSON `{"consent":true}` when recording is off. With server
+  `LOCAL_VOICE_RECORDING=true`, require exactly `{"consent":true,"recording_consent":true}`.
+  Body fields cannot turn recording on; mismatched consent is rejected before allocation. OPTIONS allows
   POST with Authorization/Content-Type for allowed loopback origins. Missing or
   false consent never dispatches an agent. Disabled/non-development returns 404.
 - Response includes `url`, `room`, generated `identity`, participant `token`,
-  `session_id`, Unix `expires_at` and `ends_at`, and `recording:false`. It is
+  `session_id`, Unix `expires_at` and `ends_at`, and server-approved `recording`. It is
   `Cache-Control: no-store`. Do not log the response. Only microphone publishing
   and subscription are granted; no camera, screen, data, metadata changes,
   admin, or agent-session management. No client room/identity/dispatch input.
@@ -224,8 +226,9 @@ manually delete live lease rooms or run multiple independent API instances.
 Before consent, tell testers: microphone audio goes through LiveKit to Deepgram;
 transcribed text goes to Google Gemini; generated speech text goes to ElevenLabs
 and audio returns through LiveKit. Use synthetic, non-sensitive conversation.
-App recording, transcript persistence, text output and SDK logs are disabled in
-voice mode; temporary in-memory conversation context is required. Deepgram model
+App recording and transcript persistence are disabled by default; separate local
+recording consent is required when enabled (see below). Text output and SDK logs
+remain disabled; temporary in-memory conversation context is required. Deepgram model
 improvement is opted out and ElevenLabs logging disabled where the SDK supports
 it. These flags do not promise deletion or zero retention by providers: review
 their account settings/terms/regions first. No recording/egress job is created.
@@ -239,6 +242,20 @@ Offline tests mock external SDK/network boundaries, not token grants or API poli
 
 No real WebRTC/browser, Vietnamese recognition/voice quality, provider/model
 availability, latency, interruption quality or production readiness is claimed.
+
+### Consented local pipeline recording
+
+For synthetic debugging only, set `LOCAL_VOICE_RECORDING=true` in the private
+backend `.env`, restart `npm run test:voice`, then check **both** consent boxes.
+Leave recording unchecked with the default `LOCAL_VOICE_RECORDING=false`.
+API and worker flags must match; the server-owned dispatch lease controls capture.
+No transcript UI, recording upload, SDK cloud recording or egress job is enabled.
+See [capture files, semantics and retention](../ai/verification.md#local-pipeline-evidence-and-replay).
+End the session before stopping the launcher so local evidence can finalize.
+For safe provider failure categories and configured policy versus unavailable
+exact retry counts, see [error evidence](../ai/verification.md#safe-provider-error-evidence).
+The existing `LOCAL_VOICE_METRICS=true` flag enables content-free diagnostics
+without recording; no new environment setting or SDK logging is needed.
 
 ## Before opening a PR
 

@@ -16,6 +16,18 @@ test('consent gate and happy lifecycle', async () => {
   await client.start(true, 'secret'); assert.equal(issued, 1);
   await client.end(); assert.deepEqual(calls, ['track-stop', 'stop', 'end']);
 });
+test('recording consent travels with issuance; unapproved recording stops before media', async () => {
+  let consent;
+  const { client, calls } = setup({ issue: async (_secret, recording) => {
+    consent = recording;
+    return { session_id: 'test', recording: true, ends_at: Date.now() / 1000 + 60 };
+  } });
+  await client.start(true, 'secret');
+  assert.equal(consent, false); assert.deepEqual(calls, ['end']);
+  await client.start(true, 'secret', true);
+  assert.equal(consent, true);
+  await client.end();
+});
 test('End wins late issuance, connection and microphone; failed End can retry', async () => {
   for (const phase of ['issue', 'connect', 'microphone']) {
     const gate = deferred(); const entered = deferred();

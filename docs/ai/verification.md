@@ -130,7 +130,7 @@ do not sum their durations or call their sum end-to-end latency.
 
 ## Safe provider error evidence
 
-Metrics `error` events use safe fields, for example:
+Metrics `error` and capture `session_error` events use the same safe fields, for example:
 
 ```json
 {"component":"llm","category":"timeout","http_status":null,"recoverable":true,"retryable":true,"retry_count":null,"retry_evidence":"unavailable_in_sdk_event","observed_error_index":1}
@@ -143,12 +143,14 @@ inspected. HTTP status is an integer 100–599 or null. Missing/non-boolean reco
 and retryability fields are null, not false. No error text, label, source, class
 name, body, URL, request ID, stack or provider object is saved or printed.
 
-`summary.json` includes `provider_errors` (first safe error, counts by
-component/category/status/recoverable, observed total and dropped count).
-Counts retain at most 2,048 errors independently of the bounded event writer;
-overflow is explicit.
+`summary.json` and capture `manifest.json` include `provider_errors` (first safe
+error, counts by component/category/status/recoverable, observed total and dropped
+count). Counts retain at most 2,048 errors independently of the bounded event
+writer; overflow is explicit. Capture guard failures remain separate in `failure`
+and `closure_reason`; first failure wins. Provider counts can still record a later
+error after a capture guard has stopped event writing, until close starts.
 
-The report records configured `retry_policy` once: `max_retry=2`,
+Both reports record configured `retry_policy` once: `max_retry=2`,
 `retry_interval=1`, `timeout=10`. This is policy, **not observed retry count**.
 Installed SDK 1.8.11 forwards typed model errors through `ErrorEvent`; neither
 model errors nor session events expose an attempt index or operation ID.
@@ -167,10 +169,10 @@ an error event. Non-API exceptions are not generally retried. Timeout is a conne
 option, not an end-to-end session deadline. No private stream wrapping or tracing
 was added to infer exact counts.
 
-For the next consented synthetic run, enable the metrics flag, restart the worker,
-then End the session to finalize the new files. Existing artifacts are not upgraded.
-The old 11.005 s LLM TTFT and 40.456 s recoverable error do **not** establish a
-timeout or its cause.
+For the next consented synthetic run, enable the existing metrics flag and/or
+recording consent as documented above, restart the worker, then End the session
+to finalize the new files. Existing artifacts are not upgraded. The old 11.005 s
+LLM TTFT and 40.456 s recoverable error do **not** establish a timeout or its cause.
 
 Offline smoke: `.venv/bin/python -m unittest discover -s tests -p test_voice_diagnostics.py`.
 
@@ -212,3 +214,99 @@ actual acoustic interruption. No live/paid baseline has been run for this change
 
 See [actual results and blockers](verification-results.md). Full text/voice gates,
 semantic approval, durable state/report work and all sprint parents stay open.
+
+## Local pipeline evidence and replay
+
+`LOCAL_VOICE_RECORDING=false` is the default, independent of metrics. Set it to
+`true` on **both** host API and worker; restart `npm run test:voice`. Check ordinary
+provider consent **and** local recording consent before Start. Missing specific
+consent is rejected before room allocation/dispatch. Only the server-issued
+`local-pipeline-v1` lease permits capture. Worker/room/flag mismatch fails closed.
+Compose remains idle and does not forward this flag. No cloud recording is enabled;
+`AgentSession.start(record=False)` stays explicit. Do not run with private data.
+
+Each run creates ignored `artifacts/ai/voice-capture-<32 hex>/` (0700, files 0600):
+
+- `manifest.json`: schema, nonsecret configured models/language/voice, installed
+  SDK version, local session ID, optional metrics-directory link, limits, status
+  and unsettled-output warning. No environment dump, tool internals or request data.
+- `events.jsonl`: monotonic relative timestamps, finalized STT alternatives (no
+  interims), text-only actual `llm_node` context (not reconstructed history), AI
+  text from `transcription_node`, speech-handle interruption/done and output progress
+  completion. Nontext context, tools and SDK metadata are omitted and counted.
+  AI text is generated/submitted text, **not spoken text**; `spoken_text` is unavailable.
+- `input.pcm`, `submitted.pcm`, `output.pcm`: original signed PCM16 frame data,
+  indexed by byte offset/sample rate/channels/time in events. `input` is the exact
+  tee into `Agent.default.stt_node`, not proof of STT provider receipt. `submitted`
+  includes room-output submission attempts, including cancelled captures and queued tails.
+  `output` includes only
+  room-sink reported progress, excluding discarded queued tails when reported.
+- `input.wav`, `output.wav`, `replay.wav`: aligned 16 kHz PCM16 replay; stereo
+  replay left=user, right=AI. Source channel means and linear interpolation are
+  debug conversions; raw frame format is retained. One worker clock preserves
+  silence and overlap. Empty capture produces valid empty WAVs.
+- `transcript.json`: readable user final-STT segments and assistant text, derived
+  from the same bounded events in the writer thread. User turn mapping is unavailable;
+  segments stay in receipt order, with all alternatives/corrections retained.
+  Assistant chunks join verbatim by speech turn; unknown-turn chunks stay separate.
+  States are `interrupted`, `done_unverified`, or `unsettled`, never proof of spoken
+  delivery. Actual LLM context stays only in `events.jsonl`. Finalized only on cleanup.
+- `reservation`: small marker reserving a 256 MiB accounting slot, not audio. It remains until deletion.
+
+Verified against pinned LiveKit Agents 1.8.11: `Agent.default.stt_node` forwards
+frames immediately; `llm_node` receives the supplied context; `transcription_node`
+receives output text. The pinned SDK `_SpeechHandleContextVar` joins generation
+tasks to speech handles (not the possibly different currently-playing speech).
+`Agent.on_enter` installs the audio wrapper; the worker waits for its ready event
+before greeting. The local wrapper reuses **only** SDK `RecorderAudioOutput`
+for `capture_frame`, flush/clear, pause, event propagation and progress slicing.
+It does not start `RecorderIO`, job recording or its encoder. The room sink derives
+progress from `AudioSource.queued_duration` and excludes discarded buffers. SDK
+wall-time progress ages are translated to worker monotonic time. A wall-clock jump
+can affect this estimate. This is room-submission/pacing evidence, not browser
+delivery, acoustic playback, provider recognition quality or mouth-to-ear latency.
+Unreported output at shutdown remains raw-only and is marked unsettled, not guessed.
+
+Capture stops the session on 600 seconds, 128 MiB cumulative raw capture (including
+submitted + replay-selected frames), 120,000 queue frames, a 128-item queue overflow, 256 KiB input/submitted frame,
+unsupported format, 1 MiB text/events budget or write error. Files are written on
+a dedicated thread; replay is bounded to 600 seconds in memory. The API duration
+remains 300 seconds by default, maximum 600; recording no longer cuts it at 120.
+Earlier resource failures still stop the session with an explicit failure status.
+SDK output progress may join many submitted frames into one valid long PCM segment.
+These segments are validated against format, cumulative and duration limits, then
+split into sample-aligned queue items of at most 256 KiB with original timestamps.
+Recording failures are not STT recognition errors: inspect manifest `failure` and
+`closure_reason`, and the single terminal `capture_failure` event (relative time,
+reason, and frame metadata where applicable). Oversized source frames use
+`audio_frame_limit`; malformed PCM metadata uses `audio_format_limit`. Terminal
+diagnostics bypass the stopped/full queue, without audio/text or exception details.
+Disk failure can prevent event persistence; the manifest is attempted separately.
+Old captures with only `audio_format_limit` cannot identify the rejected frame.
+Missing final STT before shutdown still requires independent recognition evidence;
+audio energy alone does not establish what was said or received by the provider.
+Repeated LLM contexts share the 1 MiB event budget and can exhaust it early.
+Setup failure stops the session, never silently downgrades to unrecorded. Runtime
+errors mark failure where the disk is writable. Abrupt process kill/disk failure
+can leave incomplete files; initial manifest remains `incomplete` if not finalized.
+`closed` means local cleanup, not complete delivery. No durable crash recovery.
+
+Storage has a reservation cap of four owned capture directories / 1 GiB logical
+budget under a process-shared POSIX lock, not a disk-free guarantee or preallocation.
+Per capture, 128 MiB raw + 76,800,132 bytes for two mono WAVs and stereo replay
+leaves room in 256 MiB for 120,000 audio index rows, bounded events/transcript and metadata.
+Existing other AI artifacts are neither
+read nor deleted and are outside this capture budget. No automatic retention:
+after reviewing locally, stop the launcher and remove only your chosen capture:
+
+```sh
+# Replace the example ID with the exact owned directory; do not delete artifacts/ai wholesale.
+rm -r -- artifacts/ai/voice-capture-0123456789abcdef0123456789abcdef
+.venv/bin/python -m unittest discover -s tests -p test_voice_recording.py
+```
+
+Never share these files unredacted. Local model context can include the whole
+conversation and system prompt. No chain-of-thought, provider request objects,
+headers, credentials or arbitrary SDK objects are serialized. Provider retention
+is independent of this local setting. Offline fake-frame tests do not establish
+WebRTC/browser/Vietnamese quality; no paid recording was made for this change.

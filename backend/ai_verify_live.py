@@ -1,4 +1,11 @@
-"""Bounded direct HTTPS probes, not LiveKit streaming/plugin integration proof."""
+# %%
+"""Bounded direct HTTPS probes, not LiveKit streaming/plugin integration proof.
+
+The caller must explicitly opt into paid requests and supply synthetic fixtures.
+At most three clips and two LLM cases run without retries. Each request has a
+45-second timeout; PCM is capped at 20 seconds per clip and 40 seconds total.
+Saved transcripts and proposals are evidence, not human listening approval.
+"""
 import asyncio
 import inspect
 import json
@@ -11,8 +18,13 @@ from backend.ai_verify import error_rate, execute, normalize, write_json, listen
 from backend.controller import Proposal
 
 
+# %%
 async def request(session, url, *, headers, params=None, data=None, payload=None):
-    """Never return exception strings, response errors, URLs or credential headers."""
+    """Return a bounded success body or safe status metadata, without retrying.
+
+    Never return exception strings, response errors, URLs or credential headers.
+    The response-size guard does not cap provider billing.
+    """
     try:
         async with session.post(url, headers=headers, params=params, data=data, json=payload) as response:
             if response.status != 200:
@@ -27,7 +39,13 @@ async def request(session, url, *, headers, params=None, data=None, payload=None
         return None, {'status':'failed', 'error':'transport_or_timeout'}
 
 
+# %%
 async def probe(config, output, fixtures):
+    """Checkpoint generated audio, batch transcripts and schema/policy comparisons.
+
+    Secrets stay in request headers. Saved text comes from the synthetic probe;
+    this path does not verify room delivery, report generation or voice quality.
+    """
     from livekit.plugins import elevenlabs
     voice = config.elevenlabs_voice_id or inspect.signature(elevenlabs.TTS).parameters['voice_id'].default
     result = {'status':'failed', 'transport':'direct HTTPS; plugin/media integration not tested',
@@ -98,6 +116,7 @@ async def probe(config, output, fixtures):
                 except (ValueError, KeyError, IndexError, TypeError):
                     row['stt'] = {'status':'failed', 'error':'invalid_transcript_schema'}
             checkpoint()
+        # Test structured proposals separately from the generated-audio round trip.
         for case_id in ('core', 'candidate_injection'):
             case = next(c for c in fixtures['cases'] if c['id'] == case_id)
             # Do not send secrets, CV, or raw JD to a model. The bounded fixture input is synthetic.

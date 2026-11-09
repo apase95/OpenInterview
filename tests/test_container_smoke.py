@@ -1,3 +1,9 @@
+# %%
+"""Check container-facing policies without starting Docker containers.
+
+Database readiness uses a mocked connection; heartbeat checks use temporary
+files. UI and planning checks inspect source text, not rendered browser output.
+"""
 import os
 import tempfile
 import time
@@ -6,8 +12,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 
+# %%
 class ContainerSmoke(unittest.TestCase):
+    """Check service credential scope, health evidence and repository constraints."""
     def test_runtime_provider_policy(self):
+        """Accept only the required provider variable names for each service."""
         from verify_compose import assert_provider_environment
         livekit = {'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'}
         providers = livekit | {'GOOGLE_API_KEY', 'DEEPGRAM_API_KEY', 'ELEVEN_API_KEY'}
@@ -22,6 +31,7 @@ class ContainerSmoke(unittest.TestCase):
                 assert_provider_environment(service, names)
 
     def test_readiness(self):
+        """Mock DB success and failure to check readiness status and redaction."""
         from fastapi.testclient import TestClient
         from backend.api import app
         with patch.dict(os.environ, {}, clear=True):
@@ -36,6 +46,7 @@ class ContainerSmoke(unittest.TestCase):
             self.assertNotIn('PRIVATE_SENTINEL', response.text)
 
     def test_heartbeat(self):
+        """Accept a fresh local PID file and reject stale or malformed evidence."""
         from backend.healthcheck import healthy
         with tempfile.TemporaryDirectory() as directory:
             heartbeat = Path(directory) / 'heartbeat'
@@ -47,6 +58,7 @@ class ContainerSmoke(unittest.TestCase):
             self.assertFalse(healthy(heartbeat))
 
     def test_home_scope(self):
+        """Check selected page and CSS strings without claiming visual validation."""
         root = Path(__file__).resolve().parents[1]
         page = (root / 'app/page.tsx').read_text()
         self.assertIn('aria-label="Main navigation"', page)
@@ -62,6 +74,7 @@ class ContainerSmoke(unittest.TestCase):
         self.assertTrue((root / 'app/globals.css').read_text().startswith('@import "tailwindcss";'))
 
     def test_planning_keeps_all_parent_tasks_open(self):
+        """Require all 24 distinct parent tasks to remain unchecked in plan text."""
         import re
         root = Path(__file__).resolve().parents[1]
         plan = (root / 'docs/planning/sprint-plan.md').read_text()

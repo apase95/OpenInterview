@@ -1,4 +1,11 @@
-"""Opt-in synthetic audio probe. No room, VAD, browser or endpointing measurement."""
+# %%
+"""Opt-in synthetic audio probe. No room, VAD, browser or endpointing measurement.
+
+Default execution prints an offline plan and makes no provider requests.
+With --live, three sequential cases allow at most 12 requests, no retries and
+60 seconds per case. Audio/text limits bound output, not provider charges.
+Measured SDK stages do not establish intelligibility or end-to-end latency.
+"""
 import argparse
 import asyncio
 import json
@@ -10,6 +17,7 @@ from pathlib import Path
 
 from backend.voice_latency import stats
 
+# %%
 CASES = (
     ('name', 'synthetic_name', 'Tên tôi là Nguyễn An.'),
     ('numbers', 'synthetic_numbers', 'Tôi có ba năm kinh nghiệm và có thể bắt đầu lúc chín giờ.'),
@@ -21,7 +29,12 @@ LIMITS = {'cases': 3, 'requests': 12, 'case_timeout_seconds': 60,
 UNAVAILABLE = ['speech_end', 'endpointing', 'barge_in', 'mouth_to_ear', 'browser_playback']
 
 
+# %%
 async def collect_audio(stream, *, byte_limit=2_000_000, seconds_limit=15):
+    """Collect bounded, format-consistent frames and close the supplied SDK stream.
+
+    First-frame time measures generated audio availability, not room playback.
+    """
     start = time.monotonic()
     first = None
     frames = []
@@ -46,6 +59,7 @@ async def collect_audio(stream, *, byte_limit=2_000_000, seconds_limit=15):
 
 
 async def collect_text(stream):
+    """Collect bounded nonempty text and time its first content chunk and completion."""
     start = time.monotonic()
     first = None
     text = ''
@@ -63,7 +77,14 @@ async def collect_text(stream):
     return text, {'first_text_chunk_seconds': first, 'completion_seconds': time.monotonic() - start}
 
 
+# %%
 async def probe(config, output):
+    """Run generated audio through batch STT, LLM and reply TTS, then close providers.
+
+    Transcripts and replies feed later stages but are not saved in the summary.
+    Source WAVs are synthetic. A measured status means stages completed, not
+    that the words were correct or the reply was heard by a person.
+    """
     from livekit.agents import APIConnectOptions, llm
     from livekit.plugins import deepgram, elevenlabs, google
     options = APIConnectOptions(max_retry=0, timeout=20)
@@ -131,7 +152,9 @@ async def probe(config, output):
     return report
 
 
+# %%
 def offline_report():
+    """Describe limits and unavailable observations without loading voice providers."""
     return {'mode': 'offline', 'status': 'not_run', 'limits': LIMITS,
             'transport': 'SDK plugins: generated audio -> batch STT -> streaming LLM -> streaming TTS; sequential stages',
             'cases': [{'id': key, 'source': source, 'text': text, 'status': 'not_run'} for key, source, text in CASES],
@@ -139,6 +162,7 @@ def offline_report():
 
 
 def main():
+    """Keep live configuration and artifact creation behind the explicit cost opt-in."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true')
     args = parser.parse_args()
@@ -162,5 +186,6 @@ def main():
         raise SystemExit(1)
 
 
+# %%
 if __name__ == '__main__':
     main()

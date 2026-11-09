@@ -1,3 +1,9 @@
+# %%
+"""Check synthetic contract data and generated OpenAPI against local files.
+
+Validation runs real contract models, not a database or deployed API. Document
+checks inspect links and source text and do not prove endpoint implementation.
+"""
 import copy
 import json
 from pathlib import Path
@@ -9,17 +15,22 @@ from backend.contracts import Bundle, CandidateQuestion, Room, RoomCreate, Sessi
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# %%
 class ContractTests(unittest.TestCase):
+    """Check references, lifecycle invariants and published contract consistency."""
     def fixture(self):
+        """Read a fresh synthetic bundle so each mutation stays local to its test."""
         return json.loads((ROOT / 'fixtures/synthetic/v1.json').read_text())
 
     def test_fixture_and_generated_contract(self):
+        """Validate synthetic data and require generated OpenAPI to match its file."""
         bundle = Bundle.model_validate(self.fixture())
         self.assertTrue(bundle.synthetic)
         self.assertEqual(openapi_document(), json.loads(
             (ROOT / 'docs/contracts/openapi-v1.json').read_text()))
 
     def test_bad_references_and_states(self):
+        """Reject broken ownership, evidence, consent and unsupported attachment data."""
         for mutate in (
             lambda b: b['reports'][0]['criteria'][0].update(evidence_turn_ids=['syn_missing']),
             lambda b: b['turns'][0].update(tenant_id='syn_other'),
@@ -37,6 +48,7 @@ class ContractTests(unittest.TestCase):
                 Bundle.model_validate(data)
 
     def test_openapi_local_references(self):
+        """Resolve local schema references and check the declared implemented routes."""
         document = openapi_document()
 
         def walk(value):
@@ -57,6 +69,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(implemented, {'/health', '/ready'})
 
     def test_contact_email_boundary(self):
+        """Distinguish valid room contact emails from synthetic bundle restrictions."""
         data = self.fixture()
         room = {**data['rooms'][0], 'contact': 'hr@company.org'}
         self.assertEqual(Room.model_validate(room).contact, 'hr@company.org')
@@ -72,6 +85,7 @@ class ContractTests(unittest.TestCase):
             Bundle.model_validate(data)
 
     def test_response_headers(self):
+        """Check documented version, row ETag and rate-limit response headers."""
         for path, methods in openapi_document()['paths'].items():
             if not path.startswith('/v1/'):
                 continue
@@ -84,6 +98,7 @@ class ContractTests(unittest.TestCase):
                 self.assertIn('Retry-After', operation['responses']['429'].get('headers', {}))
 
     def test_session_consent_and_time(self):
+        """Validate prejoin/refusal timing and reject turns attached to refusal."""
         original = self.fixture()['sessions'][0]
         prejoin = {**original, 'phase': 'consent', 'status': 'active', 'started_at': None,
                    'ended_at': None, 'end_reason': None}
@@ -117,12 +132,14 @@ class ContractTests(unittest.TestCase):
             Bundle.model_validate(data)
 
     def test_one_session_per_room(self):
+        """Reject two session records claiming the same synthetic room."""
         data = self.fixture()
         data['sessions'].append({**data['sessions'][0], 'id': 'syn_duplicate_session'})
         with self.assertRaisesRegex(ValueError, 'duplicate.*room'):
             Bundle.model_validate(data)
 
     def test_question_disposition_mapping(self):
+        """Enforce disposition/reason/action pairs and reject fabricated FAQ links."""
         question = self.fixture()['questions'][0]
         for disposition, reason, action in (
             ('answer', 'source_missing', 'answer_faq'),
@@ -142,6 +159,7 @@ class ContractTests(unittest.TestCase):
                     Bundle.model_validate(data)
 
     def test_changed_document_links_and_fences(self):
+        """Check local document links, balanced fences and open parent-task text."""
         names = ('docs/architecture/api-data-contract.md', 'docs/architecture/io-contracts.md',
                  'docs/README.md', 'docs/contributing/development.md',
                  'docs/planning/sprint-plan.md', 'docs/planning/implementation-checklist.md')

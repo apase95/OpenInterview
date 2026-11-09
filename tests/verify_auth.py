@@ -1,4 +1,11 @@
-"""Opt-in owned disposable PostgreSQL auth proof. No dotenv or provider calls."""
+# %%
+"""Opt-in owned disposable PostgreSQL auth proof. No dotenv or provider calls.
+
+Requires Docker and may download its database image. Uses synthetic credentials
+and a non-admin app role to test migrations, flow consumption and session storage.
+Finally removes only this run's named container and volume, if Docker responds.
+This does not verify Google tokens, browser login or full production security.
+"""
 from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
@@ -16,18 +23,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend import auth
 
 
+# %%
 def main():
+    """Provision an isolated database, exercise auth persistence, then remove it."""
     started = time.monotonic()
     name = 'oi-auth-' + uuid.uuid4().hex[:12]
     env = {key: os.environ[key] for key in ('PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'XDG_RUNTIME_DIR') if key in os.environ}
 
     def docker(*args, check=True):
+        """Capture Docker output and withhold it from failures to avoid credential leaks."""
         result = subprocess.run(['docker', *args], env=env, capture_output=True, timeout=90)
         if check and result.returncode:
             raise AssertionError('Docker failed; output withheld')
         return result.stdout.decode().strip()
 
     def wait(admin):
+        """Poll only the owned database with bounded connection attempts."""
         for _ in range(100):
             try:
                 with psycopg.connect(**admin) as c:
@@ -44,6 +55,7 @@ def main():
         port = docker('port', name, '5432/tcp').rsplit(':', 1)[1]
         admin = dict(host='127.0.0.1', port=port, user='postgres', password='synthetic-admin', dbname='postgres', connect_timeout=1)
         wait(admin)
+        # Admin access only provisions the test role/database; app checks use that role.
         with psycopg.connect(**admin, autocommit=True) as c:
             c.execute("CREATE ROLE synthetic_auth LOGIN PASSWORD 'synthetic-app' NOSUPERUSER NOCREATEDB NOCREATEROLE")
             c.execute('CREATE DATABASE auth_test OWNER synthetic_auth')
@@ -57,6 +69,7 @@ def main():
                           'https://example.test', 'synthetic-session-secret-at-least-32-characters', True, 28800)
         store = auth.Store()
         with patch.dict(os.environ, values, clear=True):
+            # Temporary SQL copies test rollback and checksum guards without editing sources.
             with tempfile.TemporaryDirectory(prefix='oi-auth-rollback-') as directory:
                 source = Path(directory) / 'broken.sql'
                 source.write_text(auth.MIGRATION.read_text() + '\nSELECT nonexistent_auth_function();')
@@ -131,5 +144,6 @@ def main():
     print(f'PASS PostgreSQL auth proof ({time.monotonic()-started:.2f}s)')
 
 
+# %%
 if __name__ == '__main__':
     main()

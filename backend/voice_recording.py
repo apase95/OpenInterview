@@ -1,7 +1,11 @@
+# %%
 """Private, bounded local evidence. Never enable SDK/cloud recording.
 
 SDK RecorderAudioOutput supplies room-sink progress slicing and event forwarding;
 we use its wrapper only, not RecorderIO or its encoder/upload lifecycle.
+Consent/configuration must agree before capture. Local files contain private
+audio, transcripts and filtered text context, not anonymous metrics alone.
+Generated text and room-sink estimates never prove browser or ear playback.
 """
 import asyncio
 from contextlib import ExitStack
@@ -19,6 +23,7 @@ import uuid
 import wave
 from backend.voice_diagnostics import Diagnostics, RETRY_POLICY
 
+# %%
 MODE = 'local-pipeline-v1'
 SECONDS = 600
 RATE = 16000
@@ -28,7 +33,9 @@ STORAGE_LIMIT = 1024 * 1024 * 1024
 FRAME_LIMIT = 120000
 
 
+# %%
 def approved(lease):
+    """Fail closed unless lease recording mode agrees with the server opt-in."""
     mode = lease.get('recording', False)
     enabled = os.getenv('LOCAL_VOICE_RECORDING') == 'true'
     if (mode is not False and mode != MODE) or (mode == MODE) != enabled:
@@ -37,11 +44,18 @@ def approved(lease):
 
 
 def private_file(path, mode='wb'):
+    """Create an exclusive owner-only file without following a final symlink."""
     fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
     return os.fdopen(fd, mode)
 
 
+# %%
 class Capture:
+    """Own private capture files, a bounded queue and one background writer.
+
+    Duration, storage, frame and event limits stop the session on failure rather
+    than silently continuing unrecorded. The pinned SDK wrapper is required.
+    """
     def __init__(self, root, config, stop):
         if version('livekit-agents') != '1.8.11':
             raise RuntimeError('Unverified recording SDK')
@@ -113,6 +127,7 @@ class Capture:
         return self.recording
 
     def fail(self, status, **details):
+        """Keep the first failure and schedule session stop safely from either thread."""
         if self.failure is None:
             self.failure_event = {'kind': 'capture_failure', 't': time.monotonic() - self.started,
                                   'reason': status, **details}
@@ -130,6 +145,7 @@ class Capture:
         return self.ids[raw]
 
     def put(self, item):
+        """Queue without blocking the audio path; queue saturation stops capture."""
         if not self.recording:
             return
         try:
@@ -138,6 +154,7 @@ class Capture:
             self.fail('queue_limit')
 
     def event(self, kind, **row):
+        """Encode caller-selected evidence under the cumulative event-byte budget."""
         if not self.recording:
             return
         encoded = (json.dumps({'kind': kind, 't': time.monotonic() - self.started, **row}, ensure_ascii=False) + '\n').encode()
@@ -148,6 +165,11 @@ class Capture:
             self.put(('event', encoded))
 
     def audio(self, name, frame, start=None):
+        """Validate PCM metadata and cumulative limits before copying bounded chunks.
+
+        Input arrival minus duration is an estimate, not provider receipt time.
+        Submitted audio records attempts, including later cancellation.
+        """
         if not self.recording:
             return
         size = frame.data.nbytes
@@ -188,6 +210,11 @@ class Capture:
         self.audio('output', frame, time.monotonic() - self.started - (time.time() - started_at))
 
     def attach(self, session):
+        """Observe speech and sanitized errors; unrecoverable errors stop the session.
+
+        Callbacks remain attached but event writes are gated by capture state.
+        Observed errors do not establish how many SDK retries ran.
+        """
         self.session = session
         def speech(event):
             handle = event.speech_handle
@@ -206,7 +233,13 @@ class Capture:
         session.on('error', error)
         session.on('close', lambda e: self.event('session_close'))
 
+    # %%
     def _write(self):
+        """Drain queued evidence, preserve raw PCM and build a debug replay/transcript.
+
+        Replay mixes resampled input and room-output estimates, not submitted
+        attempts. Text remains generated/unverified; all owned files close here.
+        """
         try:
             import numpy as np
             tracks = np.zeros((SECONDS * RATE, 2), dtype=np.int16)
@@ -302,6 +335,7 @@ class Capture:
                 self.fail('close_write_failure')
 
     async def aclose(self):
+        """Stop admission and the timer, then drain/join the writer off the event loop."""
         if self.closed:
             return
         self.closed = True
@@ -319,7 +353,12 @@ class Capture:
         await asyncio.to_thread(finish)
 
 
+# %%
 def output_wrapper(capture, sink):
+    """Wrap room output to record submissions and SDK sink-progress estimates.
+
+    Playback callbacks describe the room sink only; browser receipt is unknown.
+    """
     from livekit.agents.voice.recorder_io.recorder_io import RecorderAudioOutput
     class Output(RecorderAudioOutput):
         async def capture_frame(self, frame):
@@ -341,7 +380,13 @@ def output_wrapper(capture, sink):
     return Output(recording_io=capture, audio_output=sink, on_played=capture.output_position)
 
 
+# %%
 def recording_agent(capture, instructions):
+    """Tee default agent stages without replacing their provider behavior.
+
+    Save final STT alternatives, generated text and text-only context locally.
+    Filtering omits tools/nontext metadata, not private words inside text.
+    """
     from livekit.agents import Agent
     from livekit.agents import stt
     from livekit.agents.voice.agent_activity import _SpeechHandleContextVar

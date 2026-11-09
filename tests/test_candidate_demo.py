@@ -1,3 +1,9 @@
+# %%
+"""Check synthetic demo routes through an in-process API client.
+
+Environment flags and expiry time are controlled here. No browser, provider
+session or real candidate interview is exercised.
+"""
 import os
 import unittest
 from unittest.mock import patch
@@ -6,8 +12,11 @@ from fastapi.testclient import TestClient
 from backend.api import app
 
 
+# %%
 class CandidateDemoTests(unittest.TestCase):
+    """Check demo lifecycle idempotency and local development access gates."""
     def setUp(self):
+        """Enable demo mode temporarily and create a loopback-origin client."""
         self.env = patch.dict(os.environ, {'APP_ENV': 'development', 'CANDIDATE_DEMO_ENABLED': 'true'})
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -15,9 +24,11 @@ class CandidateDemoTests(unittest.TestCase):
         self.headers = {'Origin': 'http://127.0.0.1:3000'}
 
     def room(self):
+        """Create a synthetic frontend room through the demo route."""
         return self.client.post('/demo/rooms', headers=self.headers, json={'role_id': 'frontend'})
 
     def test_lifecycle(self):
+        """Require stable session creation and repeated end responses."""
         self.assertEqual(self.client.get('/demo/roles', headers=self.headers).status_code, 200)
         room = self.room().json()
         path = '/demo/rooms/' + room['room_id']
@@ -31,6 +42,7 @@ class CandidateDemoTests(unittest.TestCase):
         self.assertEqual(ended.json(), self.client.post(path + '/end', headers=self.headers).json())
 
     def test_validation_and_boundary(self):
+        """Reject invalid consent, origins, expired rooms and production access."""
         room = self.room().json()
         path = '/demo/rooms/' + room['room_id'] + '/sessions'
         for body in ({'acknowledged': False}, {'acknowledged': 1}, {'acknowledged': True, 'consent': True}, []):

@@ -1,4 +1,10 @@
-"""Google OIDC, independent server-side identity. No dotenv loading at import."""
+# %%
+"""Google OIDC, independent server-side identity. No dotenv loading at import.
+
+Cookies hold opaque capabilities; PostgreSQL stores their keyed hashes.
+Identity validation does not grant tenant or campaign access to domain routes.
+Public failures use fixed codes rather than private provider exception details.
+"""
 import argparse
 import asyncio
 from dataclasses import dataclass
@@ -31,6 +37,8 @@ MIGRATION = Path(__file__).with_name('migrations') / '002_auth.sql'
 router = APIRouter(prefix='/auth')
 
 
+# %%
+# Redaction covers the expected Uvicorn argument shape, not all deployment logs.
 class AuthAccessFilter(logging.Filter):
     """Uvicorn otherwise records authorization codes in callback query strings."""
     def filter(self, record):
@@ -44,6 +52,7 @@ class AuthAccessFilter(logging.Filter):
 logging.getLogger('uvicorn.access').addFilter(AuthAccessFilter())
 
 
+# Keep secret-bearing settings out of their generated representation.
 @dataclass(frozen=True, repr=False)
 class Settings:
     client_id: str
@@ -66,6 +75,9 @@ class Settings:
         return hmac.new(self.secret.encode(), (purpose + ':' + value).encode(), hashlib.sha256).hexdigest()
 
 
+# %%
+# Require matching callback/frontend hosts and schemes for host-scoped cookies.
+# Validation checks local configuration, not Google availability or credentials.
 def settings():
     names = ('GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET',
              'GOOGLE_OAUTH_REDIRECT_URI', 'APP_ORIGIN', 'AUTH_SESSION_SECRET')
@@ -94,10 +106,13 @@ def settings():
     return Settings(*values, secure, ttl)
 
 
+# Only fixed local destinations survive the login round trip.
 def return_path(value):
     return value if value in ('/', '/roles') else '/'
 
 
+# %%
+# Open a timeout-bounded connection without provisioning a database or user.
 def connect():
     names = ('DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME', 'DATABASE_USER', 'DATABASE_PASSWORD')
     if any(not os.getenv(n) for n in names):
@@ -109,10 +124,13 @@ def connect():
                           row_factory=dict_row)
 
 
+# Bind the recorded migration version to the exact SQL file bytes.
 def checksum():
     return hashlib.sha256(MIGRATION.read_bytes()).hexdigest()
 
 
+# Reject three admin flags and require the recorded checksum. This is not a full
+# privilege audit; inherited grants and schema permissions still need review.
 def check(connection):
     role = connection.execute('SELECT rolsuper OR rolcreatedb OR rolcreaterole AS admin FROM pg_roles WHERE rolname=current_user').fetchone()
     if not role or role['admin']:
@@ -122,6 +140,8 @@ def check(connection):
         raise ValueError('Run explicit auth migration; checksum must match')
 
 
+# Serialize explicit migration attempts with a transaction-scoped advisory lock.
+# A recorded version is reusable only if its source checksum still matches.
 def migrate(connection):
     with connection.transaction():
         role = connection.execute('SELECT rolsuper OR rolcreatedb OR rolcreaterole AS admin FROM pg_roles WHERE rolname=current_user').fetchone()
@@ -139,6 +159,9 @@ def migrate(connection):
         return True
 
 
+# %%
+# Each action owns a checked connection context. HTTP callers move this blocking
+# work to a thread pool; no connection is shared between requests here.
 class Store:
     def run(self, action):
         with connect() as c:
@@ -146,6 +169,7 @@ class Store:
             return action(c)
 
     def create_flow(self, s, state, browser, nonce, verifier, target):
+        """Store a ten-minute flow with hashed state/browser and server-only PKCE data."""
         def action(c):
             c.execute('DELETE FROM auth_flows WHERE expires_at <= now()')
             c.execute('DELETE FROM auth_sessions WHERE expires_at <= now()')
@@ -154,11 +178,13 @@ class Store:
         self.run(action)
 
     def consume(self, s, state, browser):
+        """Delete and return one unexpired browser-bound flow to prevent reuse."""
         return self.run(lambda c: c.execute(
             'DELETE FROM auth_flows WHERE state_hash=%s AND browser_hash=%s AND expires_at>now() RETURNING nonce,verifier,return_to',
             (s.digest('state', state), s.digest('browser', browser))).fetchone())
 
     def login(self, s, claims, token, old):
+        """Upsert issuer/subject identity and replace the presented old session."""
         def action(c):
             account = c.execute('''INSERT INTO auth_accounts (id,issuer,subject,email,name)
                 VALUES (%s,%s,%s,%s,%s) ON CONFLICT (issuer,subject)
@@ -171,6 +197,7 @@ class Store:
         self.run(action)
 
     def session(self, s, token):
+        """Resolve an unexpired session and current account role, or return no row."""
         row = self.run(lambda c: c.execute('''SELECT a.id,a.email,a.name,a.role FROM auth_sessions s
             JOIN auth_accounts a ON a.id=s.account_id WHERE s.token_hash=%s AND s.expires_at>now()''',
             (s.digest('session', token),)).fetchone())
@@ -179,12 +206,14 @@ class Store:
         return row
 
     def logout(self, s, token):
+        """Revoke only the supplied session hash."""
         self.run(lambda c: c.execute('DELETE FROM auth_sessions WHERE token_hash=%s', (s.digest('session', token),)))
 
 
 store = Store()
 
 
+# %%
 class Provider:
     """Fixed endpoints, bounded per-worker metadata/key cache, no token persistence."""
     def __init__(self):
@@ -229,6 +258,11 @@ class Provider:
             return url
 
     async def identity(self, s, code, flow):
+        """Exchange with PKCE and validate signature, claims, nonce and verified email.
+
+        The caller must first consume the matching browser-bound flow. Provider
+        access and refresh tokens are not persisted by this adapter.
+        """
         await self.metadata()
         async with self.client(s) as client:
             token = await client.fetch_token(TOKEN, code=code, grant_type='authorization_code', code_verifier=flow['verifier'])
@@ -252,16 +286,22 @@ class Provider:
 provider = Provider()
 
 
+# %%
+# Host-scoped HttpOnly cookies use Secure for the HTTPS configuration.
 def cookie(response, s, name, value, age):
     response.set_cookie(name, value, max_age=age, httponly=True, secure=s.secure, samesite='lax', path='/')
 
 
+# Clear the flow capability and redirect using a caller-selected fixed error code.
 def failure(s, error):
     response = RedirectResponse(s.origin + '/login?error=' + error, status_code=303)
     cookie(response, s, s.flow_cookie, '', 0)
     return response
 
 
+# %%
+# Generate separate state, browser binding, nonce and PKCE verifier values.
+# Persist the flow before redirecting so a failed store cannot start a usable flow.
 @router.get('/google/start')
 async def start(request: Request):
     s = request.state.auth
@@ -280,6 +320,8 @@ async def start(request: Request):
     return response
 
 
+# Consume the one-use flow before provider exchange, including denial callbacks.
+# Duplicate query keys fail; verified identity does not select an application role.
 @router.get('/google/callback')
 async def callback(request: Request):
     s = request.state.auth
@@ -316,6 +358,7 @@ async def callback(request: Request):
     return response
 
 
+# Return current identity and a session-bound CSRF digest, not the cookie token.
 @router.get('/me')
 async def me(request: Request):
     s = request.state.auth
@@ -331,6 +374,8 @@ async def me(request: Request):
     return JSONResponse({'user': user, 'csrf_token': s.digest('csrf', token)})
 
 
+# Require exact Origin and the session-bound CSRF header before revocation.
+# Keep the cookie on database failure so the browser can retry.
 @router.post('/logout')
 async def logout(request: Request):
     s = request.state.auth
@@ -348,6 +393,9 @@ async def logout(request: Request):
     return response
 
 
+# %%
+# Settings and privacy headers apply only to /auth/ paths. This middleware does
+# not authenticate or authorize unrelated application routes.
 async def boundary(request, call_next):
     if not request.url.path.startswith('/auth/'):
         return await call_next(request)
@@ -364,6 +412,9 @@ async def boundary(request, call_next):
     return response
 
 
+# %%
+# Explicit setup never provisions roles or contacts Google. Production migration
+# needs extra confirmation; dotenv loading happens only when requested by CLI.
 def main():
     parser = argparse.ArgumentParser(description='Explicit independent auth migration/check; never provisions DB/users.')
     parser.add_argument('command', choices=('migrate', 'check'))

@@ -1,4 +1,9 @@
-"""Offline auth checks; run exactly: python -m unittest tests.test_google_auth."""
+# %%
+"""Offline auth checks; run exactly: python -m unittest tests.test_google_auth.
+
+Routes use a memory DB stand-in and provider identity mocks. Signed-token checks
+use real validation with an HTTP mock transport, not live Google OAuth or SQL.
+"""
 import os
 import asyncio
 import base64
@@ -26,6 +31,7 @@ ENV = dict(APP_ENV='development', APP_ORIGIN='http://127.0.0.1:3000',
            AUTH_SESSION_SECRET='synthetic-session-secret-at-least-32-characters')
 
 
+# %%
 class MemoryStore:
     """External DB stand-in only; real SQL covered by verify_auth.py."""
     def __init__(self):
@@ -49,8 +55,11 @@ class MemoryStore:
         self.sessions.pop(token, None)
 
 
+# %%
 class AuthSmoke(unittest.TestCase):
+    """Check auth trust boundaries, replay protection and sanitized failures."""
     def test_cli_check_validates_settings_before_database(self):
+        """Mock DB access and require settings validation before a connection."""
         with patch.dict(os.environ, {}, clear=True), patch('sys.argv', ['auth', 'check']), patch.object(auth, 'connect') as connect:
             with self.assertRaises(SystemExit):
                 auth.main()
@@ -60,11 +69,13 @@ class AuthSmoke(unittest.TestCase):
             check.assert_called_once_with(connect.return_value.__enter__.return_value)
 
     def test_disabled_health_and_auth(self):
+        """Keep liveness available while unconfigured auth fails closed."""
         with patch.dict(os.environ, {}, clear=True), TestClient(app) as client:
             self.assertEqual(client.get('/health').status_code, 200)
             self.assertEqual(client.get('/auth/me').status_code, 503)
 
     def test_config_and_return_boundary(self):
+        """Reject unsafe return targets and insecure production settings."""
         with patch.dict(os.environ, ENV, clear=True):
             settings = auth.settings()
             self.assertEqual(settings.cookie, 'oi_session_dev')
@@ -76,6 +87,7 @@ class AuthSmoke(unittest.TestCase):
                 auth.settings()
 
     def test_route_flow_rotation_replay_and_logout(self):
+        """Use fake identity/storage to check PKCE, browser binding and CSRF logout."""
         from unittest.mock import AsyncMock
         memory = MemoryStore()
         async def authorize(s, state, nonce, verifier):
@@ -125,6 +137,7 @@ class AuthSmoke(unittest.TestCase):
             self.assertNotIn('PRIVATE', str(response.headers))
 
     def test_signed_oidc_through_mock_transport(self):
+        """Validate locally signed tokens and bad claims over fake discovery/JWKS HTTP."""
         key = JsonWebKey.generate_key('RSA', 2048, is_private=True, options={'kid': 'offline'})
         wrong_key = JsonWebKey.generate_key('RSA', 2048, is_private=True, options={'kid': 'offline'})
         with patch.dict(os.environ, ENV, clear=True):
@@ -171,6 +184,7 @@ class AuthSmoke(unittest.TestCase):
             asyncio.run(check(network=True))
 
     def test_hash_separation_and_access_log(self):
+        """Separate token hash purposes and remove callback secrets from access logs."""
         with patch.dict(os.environ, ENV, clear=True):
             s = auth.settings()
         token = secrets.token_urlsafe(32)
@@ -182,6 +196,7 @@ class AuthSmoke(unittest.TestCase):
         self.assertNotIn('PRIVATE', record.getMessage())
 
     def test_faults_fail_closed_and_production_cookie(self):
+        """Mock provider/DB faults and check safe errors and secure cookie attributes."""
         from unittest.mock import AsyncMock
         with patch.dict(os.environ, ENV, clear=True), TestClient(app) as client:
             with patch.object(auth.provider, 'authorization', new=AsyncMock(side_effect=httpx.ConnectError('PRIVATE'))):

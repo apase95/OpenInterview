@@ -1,4 +1,10 @@
-"""Offline checks at the recording hooks; no provider or dotenv access."""
+# %%
+"""Check recording consent, private files and SDK hooks without provider calls.
+
+Synthetic frames and fake audio/model nodes drive real capture and SDK session
+code. Temporary output distinguishes submitted audio from reported playout;
+fake sink completion does not prove browser playback or intelligible speech.
+"""
 import asyncio
 import json
 import os
@@ -15,8 +21,11 @@ from fastapi.testclient import TestClient
 from test_local_voice import ENV, HEADERS
 
 
+# %%
 class ConsentTests(unittest.TestCase):
+    """Check server-controlled recording enablement before fake room allocation."""
     def test_explicit_consent_before_allocation(self):
+        """Reject missing recording consent before invoking the mocked room API."""
         from backend.api import app
         with patch.dict(os.environ, {**ENV, 'LOCAL_VOICE_RECORDING': 'true'}, clear=True), patch('backend.api.voice_api') as remote:
             client = TestClient(app, base_url='http://127.0.0.1', client=('127.0.0.1', 9))
@@ -25,6 +34,7 @@ class ConsentTests(unittest.TestCase):
             remote.assert_not_called()
 
     def test_approved_lease_and_body_cannot_enable(self):
+        """Require server enablement and matching approved metadata on the fake lease."""
         from backend.api import app, attempts
         from backend.voice_recording import approved, MODE
         attempts.clear()
@@ -51,8 +61,11 @@ class ConsentTests(unittest.TestCase):
                 self.assertTrue(approved(lease))
 
 
+# %%
 class RecordingTests(unittest.IsolatedAsyncioTestCase):
+    """Check bounded capture, private replay output and synthetic SDK integration."""
     async def test_terminal_failure_and_budgets(self):
+        """Keep the first terminal budget/format failure and stop later persistence."""
         import queue
         from backend.voice_recording import Capture, RAW_LIMIT
         from livekit import rtc
@@ -91,6 +104,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(json.loads((capture.path / 'manifest.json').read_text())['status'], first)
 
     async def test_long_sdk_segment(self):
+        """Use a fake SDK sink to check long-segment chunk offsets and WAV tail data."""
         import time
         from livekit import rtc
         from livekit.agents.voice import io as sdk_io
@@ -137,6 +151,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(data[-2:], b'\x01\x00')
 
     async def test_full_supported_duration_and_budget(self):
+        """Check declared storage/frame limits and the exact capture-duration boundary."""
         from backend.voice_recording import Capture
         from livekit import rtc
         with tempfile.TemporaryDirectory() as directory:
@@ -159,6 +174,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
             stop.assert_called_once()
 
     async def test_tracks_and_private_files(self):
+        """Check synthetic track mixing, resampling, transcript retention and file modes."""
         import numpy as np
         from livekit import rtc
         from backend.voice_recording import Capture
@@ -186,6 +202,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('xin chào', (capture.path / 'events.jsonl').read_text())
 
     async def test_actual_agent_nodes_forward_and_filter(self):
+        """Patch default SDK nodes to check forwarding and filtered transcript/context data."""
         from backend.voice_recording import recording_agent
         from livekit.agents import Agent, llm
         recorded = []
@@ -222,6 +239,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('FAKE_SECRET', context_rows)
 
     async def test_actual_output_hook_discards_tail_and_preserves_lifecycle(self):
+        """Use fake sink progress/cancellation to separate played and submitted PCM."""
         import numpy as np
         from livekit import rtc
         from livekit.agents.voice import io as sdk_io
@@ -275,6 +293,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('output_capture_cancelled', (capture.path / 'events.jsonl').read_text())
 
     async def test_limits_storage_empty_and_write_failure(self):
+        """Check event/storage rejection and safe closure after a mocked write failure."""
         from backend.voice_recording import Capture
         with tempfile.TemporaryDirectory() as directory:
             stop = Mock()
@@ -299,6 +318,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(capture.events.closed)
 
     async def test_speech_and_text_hooks(self):
+        """Drive fake callbacks to check private transcript chunks and unknown spoken text."""
         from backend.voice_recording import Capture, recording_agent
         from livekit.agents import Agent
         callbacks = {}
@@ -337,6 +357,7 @@ class RecordingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((capture.path / 'transcript.json').stat().st_mode & 0o777, 0o600)
 
     async def test_real_session_say_calls_recording_hooks_without_text_output(self):
+        """Run a real SDK session with fake model/TTS/sink to check recording hooks."""
         import numpy as np
         import time
         from livekit import rtc

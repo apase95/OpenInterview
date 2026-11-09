@@ -1,3 +1,10 @@
+# %%
+"""Check local voice access and worker lifecycle with synthetic credentials.
+
+In-process routes use fake room services; worker tests replace SDK constructors,
+sessions and job context. Token claims and cleanup are checked without live
+audio, browser/WebRTC delivery or provider calls.
+"""
 import os
 import unittest
 import json
@@ -24,12 +31,16 @@ HEADERS = {'Origin': ENV['LOCAL_VOICE_ORIGINS'],
            'Authorization': 'Bearer ' + ENV['LOCAL_VOICE_SECRET']}
 
 
+# %%
 class LocalVoiceTests(unittest.TestCase):
+    """Check local-only API gates, limited token grants and fake room lifecycle."""
     def setUp(self):
+        """Clear process-local attempt tracking before each route check."""
         from backend.api import attempts
         attempts.clear()
 
     def test_disabled_and_auth(self):
+        """Require enablement, authorization and consent while admitting CORS preflight."""
         from backend.api import app
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(TestClient(app).post('/local/voice/sessions', json={'consent': True}).status_code, 404)
@@ -44,6 +55,7 @@ class LocalVoiceTests(unittest.TestCase):
             self.assertEqual(preflight.headers['access-control-allow-origin'], ENV['LOCAL_VOICE_ORIGINS'])
 
     def test_grants(self):
+        """Inspect a locally signed token for microphone-only, short-lived grants."""
         import base64
         import json
         from backend.api import voice_token
@@ -58,6 +70,7 @@ class LocalVoiceTests(unittest.TestCase):
         self.assertLessEqual(payload['exp'] - payload['nbf'], 60)
 
     def test_sessions_limits_end_expiry_and_failure(self):
+        """Use fake room/dispatch services to check capacity, expiry and safe failures."""
         from backend.api import app, AGENT_NAME
         rooms = []
         service = SimpleNamespace(
@@ -112,6 +125,7 @@ class LocalVoiceTests(unittest.TestCase):
             self.assertNotIn('PRIVATE_SENTINEL', failed.text)
 
     def test_boundaries(self):
+        """Reject production, remote clients, unsafe settings, origins and request bodies."""
         from backend.api import app
         with patch.dict(os.environ, ENV, clear=True):
             client = TestClient(app, base_url='http://127.0.0.1', client=('127.0.0.1', 12345))
@@ -128,6 +142,7 @@ class LocalVoiceTests(unittest.TestCase):
             self.assertEqual(remote.post('/local/voice/sessions', headers=HEADERS, json={'consent': True}).status_code, 403)
 
     def test_worker_pipeline(self):
+        """Inspect mocked SDK construction for model routing, privacy and retry options."""
         from backend.worker import voice_session
         config = SimpleNamespace(deepgram_model='nova-3', deepgram_language='vi',
             deepgram_api_key='stt-secret', gemini_controller_model='unchanged-model',
@@ -146,8 +161,11 @@ class LocalVoiceTests(unittest.TestCase):
             self.assertEqual(agents.APIConnectOptions.call_args.kwargs['max_retry'], 2)
 
 
+# %%
 class VoiceStartupTests(unittest.TestCase):
+    """Replace the SDK CLI to check worker startup routing and safe exit behavior."""
     def test_help_skips_config_and_config_failure_is_sanitized(self):
+        """Keep help config-free and hide private details on a mocked config failure."""
         from backend.worker import main
         server = SimpleNamespace(run=AsyncMock(), on=Mock())
         cli = SimpleNamespace(run_app=Mock())
@@ -171,6 +189,7 @@ class VoiceStartupTests(unittest.TestCase):
             logging.disable(previous)
 
     def test_start_routes_args_and_reports_registration(self):
+        """Check forwarded CLI arguments and sanitized fake registration output."""
         from backend.worker import main
         server = SimpleNamespace(run=AsyncMock(), on=Mock())
         callbacks = {}
@@ -197,6 +216,7 @@ class VoiceStartupTests(unittest.TestCase):
             logging.disable(previous)
 
     def test_swallowed_startup_failure_exits_nonzero(self):
+        """Detect failed server startup even when a fake SDK CLI swallows its error."""
         from backend.worker import main
         server = SimpleNamespace(run=AsyncMock(side_effect=RuntimeError('PRIVATE_SENTINEL')), on=Mock())
 
@@ -222,8 +242,11 @@ class VoiceStartupTests(unittest.TestCase):
             logging.disable(previous)
 
 
+# %%
 class VoiceJobTests(unittest.IsolatedAsyncioTestCase):
+    """Check job cleanup with fake SDK session and participant context."""
     async def test_greeting_and_failure_cleanup(self):
+        """Require private output options, one greeting and cleanup after start failure."""
         from backend.worker import voice_job
         room = SimpleNamespace(name='local_voice_test', metadata='{"ended":false}')
         lease = {'deadline': time.time() + 60, 'identity': 'participant_test'}

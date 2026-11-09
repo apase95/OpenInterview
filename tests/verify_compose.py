@@ -1,6 +1,11 @@
+# %%
 """Opt-in Docker integration check. Own project, synthetic env, cleanup even on failure.
 
 No root dotenv, provider network, raw logs, or compose config output.
+Builds images and starts four services, so Docker downloads and build costs apply.
+Tests persistence, selected isolation rules and synthetic secret exposure only.
+Cleanup removes this project's containers, volumes and networks, not built images;
+it needs a responsive Docker daemon and is not a production security audit.
 """
 import io
 import json
@@ -18,7 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SENTINEL = 'FAKE_PROVIDER_SECRET_7b02e194'
 
 
+# %%
 def assert_provider_environment(service, names):
+    """Compare runtime credential names against each service's expected boundary."""
     livekit = {'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'}
     expected = {'web': set(), 'api': livekit,
                 'worker': livekit | {'GOOGLE_API_KEY', 'DEEPGRAM_API_KEY', 'ELEVEN_API_KEY'}}
@@ -32,12 +39,15 @@ def assert_provider_environment(service, names):
 
 
 def port():
+    """Choose a free loopback port; releasing the socket leaves a startup bind race."""
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         return sock.getsockname()[1]
 
 
+# %%
 def main():
+    """Exercise a uniquely named Compose project using only synthetic settings."""
     started = time.monotonic()
     project = 'oi-check-' + uuid.uuid4().hex[:10]
     # Deliberately include SQL/shell/URI special characters in the app password.
@@ -59,21 +69,25 @@ def main():
         command = ['docker', 'compose', '--env-file', str(filename), '-p', project, '-f', str(ROOT / 'docker-compose.yml')]
 
         def run(args, *, check=True, timeout=120, environment=env):
+            """Capture command output and expose only a credential-safe failure summary."""
             result = subprocess.run(args, cwd=ROOT, env=environment, capture_output=True, timeout=timeout)
             if check and result.returncode:
                 raise AssertionError(f'Command failed ({result.returncode}): {args[0]} {args[1]} (output withheld; synthetic credentials may be present)')
             return result
 
         def compose(*args, **kwargs):
+            """Keep every Compose operation tied to the explicit env file and project."""
             return run(command + list(args), **kwargs)
 
         def up():
+            """Wait for exactly the four expected healthy services, not provider readiness."""
             compose('up', '-d', '--wait', '--wait-timeout', '100')
             services = [json.loads(line) for line in compose('ps', '--format', 'json').stdout.decode().splitlines()]
             assert {item['Service'] for item in services} == {'web', 'api', 'worker', 'postgres'}
             assert all(item['Health'] == 'healthy' for item in services)
 
         def sql(statement):
+            """Run supplied test SQL as the non-admin app user inside owned PostgreSQL."""
             return compose('exec', '-T', 'postgres', 'sh', '-c',
                            'PGPASSWORD="$DATABASE_PASSWORD" exec psql -h 127.0.0.1 -U openinterview -d openinterview -v ON_ERROR_STOP=1 -tAc "$1"',
                            'sh', statement).stdout.decode().strip()
@@ -159,5 +173,6 @@ def main():
     print(f'PASS compose verification total {time.monotonic() - started:.2f}s')
 
 
+# %%
 if __name__ == '__main__':
     main()

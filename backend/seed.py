@@ -1,4 +1,10 @@
-"""Explicit dev/test-only migrations and synthetic seed. Never loads dotenv."""
+# %%
+"""Explicit dev/test-only migrations and synthetic seed. Never loads dotenv.
+
+The CLI requires a dedicated development/test database and explicit confirmation.
+Name and environment guards reduce mistakes; they are not a privilege boundary.
+Database and fixture failure details are withheld from command output.
+"""
 import argparse
 import hashlib
 import os
@@ -17,6 +23,9 @@ TABLES = ('tenants', 'users', 'campaigns', 'rooms', 'sessions', 'turns',
           'corrections', 'questions', 'answers', 'jobs', 'reports')
 
 
+# %%
+# Guard the connection before opening it. These checks do not inspect DB role
+# privileges; operators must supply an appropriately restricted dedicated role.
 def connect(*, confirm_synthetic=False):
     names = ('DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME', 'DATABASE_USER', 'DATABASE_PASSWORD')
     if (not confirm_synthetic or os.environ.get('APP_ENV') not in ('development', 'test')
@@ -32,10 +41,14 @@ def connect(*, confirm_synthetic=False):
     return connection
 
 
+# Coordinate cooperating migration/seed transactions, not arbitrary DB writers.
 def lock(connection):
     connection.execute('SELECT pg_advisory_xact_lock(704193001)')
 
 
+# %%
+# Apply version one once under a transaction lock; refuse changed migration text
+# when that version already exists instead of silently replacing its checksum.
 def migrate(connection, *, source=MIGRATION):
     content = source.read_text()
     digest = hashlib.sha256(content.encode()).hexdigest()
@@ -52,6 +65,9 @@ def migrate(connection, *, source=MIGRATION):
     return True
 
 
+# %%
+# Validate the full synthetic bundle and migration before inserting missing rows.
+# Existing identical rows are reused; conflicting IDs abort the transaction.
 def seed(connection, bundle):
     # Revalidate even if called with a constructed/copied model. No unchecked seed API.
     bundle = Bundle.model_validate(bundle.model_dump(mode='json'))
@@ -85,6 +101,9 @@ def seed(connection, bundle):
         return changed
 
 
+# %%
+# Validate seed input before connecting. No automatic migration or destructive
+# reset is performed by the seed command; failures produce a fixed public message.
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('migrate', 'seed'))

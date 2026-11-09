@@ -1,3 +1,9 @@
+# %%
+"""Check controller evidence and verification reports with synthetic inputs.
+
+HTTP requests and plugin construction are replaced in live-path checks. These
+tests validate local policy and report handling, not provider or audio quality.
+"""
 import unittest
 import asyncio
 import tempfile
@@ -9,8 +15,11 @@ from backend.controller import State, Input, decide
 from backend.ai_verify import campaign, offline, error_rate
 
 
+# %%
 class VerificationTests(unittest.TestCase):
+    """Exercise decision safety, privacy and verification output boundaries."""
     def test_cache_cannot_override_current_terminal_or_expiry(self):
+        """Require current end and expiry state to take priority over cached turns."""
         from datetime import timedelta
         now = datetime(2026, 1, 2, tzinfo=timezone.utc)
         c = campaign()
@@ -21,6 +30,7 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(decide(c, asked.state, event, now + timedelta(minutes=11)).action, 'wrap')
 
     def test_cache_minimizes_sensitive_and_restricted_text(self):
+        """Keep private text out of cached state while detecting conflicting retries."""
         import json
         from dataclasses import asdict
         from datetime import timedelta
@@ -36,6 +46,7 @@ class VerificationTests(unittest.TestCase):
                 decide(campaign(), result.state, event.model_copy(update={'text':'changed'}), now)
 
     def test_followup_requires_nonempty_finalized_evidence(self):
+        """Admit a proposed follow-up only when its evidence names a known turn."""
         from datetime import timedelta
         from backend.controller import FOLLOWUP
         now = datetime(2026, 1, 2, tzinfo=timezone.utc)
@@ -47,11 +58,13 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(result.action, expected)
 
     def test_cases(self):
+        """Require the checked-in offline decision cases to pass."""
         rows = offline()
         self.assertGreaterEqual(len(rows), 12)
         self.assertTrue(all(row['passed'] for row in rows), rows)
 
     def test_end_and_dedupe(self):
+        """Keep explicit stop dominant and repeated stop results stable."""
         c = campaign()
         now = datetime(2026, 1, 2, tzinfo=timezone.utc)
         s = State(deadline=now, phase='consent')
@@ -61,10 +74,12 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(decide(c, result.state, event, now), result)
 
     def test_metrics(self):
+        """Check word-error scoring for edits and an exact Vietnamese match."""
         self.assertEqual(error_rate('a b', 'a c d'), 1)
         self.assertEqual(error_rate('chưa làm', 'chưa làm'), 0)
 
     def test_multiturn_budget_and_all_phase_end(self):
+        """Bound follow-ups and allow an explicit stop in every listed phase."""
         from datetime import timedelta
         from backend.controller import FOLLOWUP
         c = campaign()
@@ -83,6 +98,7 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(decide(c, s, Input(turn_id='syn_end', text='Dừng', intent='end'), now).action, 'end')
 
     def test_correction_skip_and_conflict(self):
+        """Preserve original evidence, link corrections and reject changed retries."""
         c = campaign()
         now = datetime(2026, 1, 2, tzinfo=timezone.utc)
         from datetime import timedelta
@@ -97,6 +113,7 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(skipped.state.refused[0]['value'], None)
 
     def test_live_config_failure_is_safe(self):
+        """Replace config loading with a failure and require a secret-free result."""
         from backend.ai_verify import live
         with tempfile.TemporaryDirectory() as folder, patch('backend.config.load_config', side_effect=ValueError('PRIVATE_SECRET')):
             result = asyncio.run(live(Path(folder)))
@@ -104,6 +121,7 @@ class VerificationTests(unittest.TestCase):
         self.assertNotIn('PRIVATE_SECRET', str(result))
 
     def test_live_http_failure_and_schema(self):
+        """Use a fake HTTP session to check sanitized transport and status failures."""
         from backend.ai_verify_live import request
         from unittest.mock import AsyncMock, Mock
         import aiohttp
@@ -121,6 +139,7 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(asyncio.run(request(session, 'https://example.com', headers={}))[1]['http_status'], 403)
 
     def test_live_artifacts_are_serializable(self):
+        """Write temporary JSON evidence and require stable date serialization."""
         import json
         from datetime import date, timedelta
         from backend.ai_verify import execute, FIXTURE, write_json
@@ -139,6 +158,11 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(saved['state']['deadline'], '2026-01-02T00:10:00+00:00')
 
     def test_mocked_live_evidence(self):
+        """Use fake plugin and HTTP replies to test artifacts and policy rejection.
+
+        Schema-valid replies must still fail when controller actions disagree;
+        generated listening-review links do not establish audio quality.
+        """
         import json
         import types
         from unittest.mock import AsyncMock
@@ -193,6 +217,7 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(json.loads((Path(folder) / 'providers.json').read_text())['llm'][0]['comparison']['input']['now'], '2026-01-02T00:00:00+00:00')
 
     def test_default_cli_and_docs(self):
+        """Forbid live/config calls by default and check manifest and document links."""
         import contextlib
         import io
         import json

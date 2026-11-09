@@ -1,3 +1,9 @@
+# %%
+"""Check local latency evidence and incremental SDK stream consumption.
+
+Fake sessions and synthetic model/audio streams drive real recorder and SDK
+code. Reports describe local events, not browser playback or provider latency.
+"""
 import asyncio
 import io
 import json
@@ -13,8 +19,11 @@ from contextlib import redirect_stdout
 from backend.voice_latency import Recorder
 
 
+# %%
 class LatencyTests(unittest.TestCase):
+    """Check offline defaults, sanitized summaries and bounded event storage."""
     def test_offline_cli_deterministic_without_configuration(self):
+        """Forbid config access and require repeatable not-run baseline output."""
         from backend.voice_baseline import main
         outputs = []
         with patch('backend.config.load_config', side_effect=AssertionError('must stay offline')), patch(
@@ -28,6 +37,7 @@ class LatencyTests(unittest.TestCase):
         self.assertEqual(json.loads(outputs[0])['status'], 'not_run')
 
     def test_wiring_and_summary(self):
+        """Drive fake callbacks to check quantiles and removal of private identifiers."""
         with tempfile.TemporaryDirectory() as directory:
             callbacks = {}
             session = NS(on=lambda name, fn: callbacks.update({name: fn}))
@@ -49,6 +59,7 @@ class LatencyTests(unittest.TestCase):
             self.assertNotIn('SECRET', (recorder.path / 'events.jsonl').read_text())
 
     def test_interruption_cancel_errors_and_bound(self):
+        """Count interruption/errors, exclude cancelled timing and bound stored rows."""
         with tempfile.TemporaryDirectory() as directory:
             callbacks = {}
             recorder = Recorder(Path(directory), limit=8)
@@ -72,8 +83,11 @@ class LatencyTests(unittest.TestCase):
             self.assertGreater(report['dropped'], 0)
 
 
+# %%
 class StreamingTests(unittest.IsolatedAsyncioTestCase):
+    """Check incremental consumption and cleanup without external voice services."""
     async def test_worker_wires_metrics_and_preserves_error_cleanup(self):
+        """Use a fake worker session to preserve error events and close job resources."""
         from backend.worker import voice_job
         with tempfile.TemporaryDirectory() as directory:
             recorder = Recorder(Path(directory))
@@ -104,6 +118,7 @@ class StreamingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([r['recoverable'] for r in recorder.rows if r['kind'] == 'error'], [True, False])
 
     async def test_sdk_stream_delivers_before_completion_and_propagates_error(self):
+        """Drive a fake model through real SDK streaming before a terminal error."""
         from livekit.agents import APIConnectOptions, APIConnectionError, llm
         gate = asyncio.Event()
         class Model(llm.LLM):
@@ -129,6 +144,7 @@ class StreamingTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(errors[0].recoverable)
 
     async def test_audio_consumer_reads_first_frame_before_producer_finishes(self):
+        """Gate synthetic audio to check incremental reads, duration and byte limits."""
         from backend.voice_baseline import collect_audio
         from livekit import rtc
         gate = asyncio.Event()

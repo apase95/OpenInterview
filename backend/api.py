@@ -115,6 +115,122 @@ async def lifespan(app):
 
 
 app = FastAPI(lifespan=lifespan)
+from backend.auth import router as auth_router, boundary as auth_boundary
+app.include_router(auth_router)
+app.middleware('http')(auth_boundary)
+
+# Synthetic, process-local capabilities only. Never used by voice or v1 routes.
+demo_rooms = {}
+demo_sessions = {}
+DEMO_ROLES = [{'role_id': key, 'name': name} for key, name in (
+    ('ba', 'Business Analyst'), ('devops', 'DevOps'), ('fullstack', 'Fullstack'),
+    ('frontend', 'Frontend'), ('backend', 'Backend'), ('ai', 'AI Engineer'))]
+
+
+@app.middleware('http')
+async def candidate_demo_boundary(request: Request, call_next):
+    if not request.url.path.startswith('/demo/'):
+        return await call_next(request)
+    headers = {'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'}
+    try:
+        if os.getenv('APP_ENV') != 'development' or os.getenv('CANDIDATE_DEMO_ENABLED') != 'true':
+            raise HTTPException(404, 'Not found')
+        if (not request.client or not ipaddress.ip_address(request.client.host).is_loopback
+                or request.url.hostname not in ('localhost', '127.0.0.1', '::1')):
+            raise HTTPException(403, 'Local access required')
+        origin = request.headers.get('origin', '')
+        if origin not in ('http://127.0.0.1:3000', 'http://localhost:3000'):
+            raise HTTPException(403, 'Origin denied')
+        headers.update({'Access-Control-Allow-Origin': origin, 'Vary': 'Origin'})
+        if request.method == 'OPTIONS':
+            if (request.headers.get('access-control-request-method') not in ('GET', 'POST')
+                    or request.headers.get('access-control-request-headers', '').lower() not in ('', 'content-type')):
+                raise HTTPException(403, 'Preflight denied')
+            return Response(status_code=204, headers={**headers, 'Access-Control-Allow-Methods': 'GET, POST',
+                                                      'Access-Control-Allow-Headers': 'Content-Type'})
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 1024:
+                raise HTTPException(413, 'Body too large')
+        request._body = bytes(body)
+        response = await call_next(request)
+        response.headers.update(headers)
+        return response
+    except (ValueError, HTTPException) as error:
+        return JSONResponse({'detail': error.detail if isinstance(error, HTTPException) else 'Local access required'},
+                            status_code=error.status_code if isinstance(error, HTTPException) else 403, headers=headers)
+
+
+def demo_resource(store, key):
+    resource = store.get(key)
+    if not resource or resource['expires_at'] <= time.time():
+        raise HTTPException(404, 'Demo expired or not found')
+    return resource
+
+
+async def demo_body(request):
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError()
+        return body
+    except ValueError:
+        raise HTTPException(422, 'Invalid demo input') from None
+
+
+@app.get('/demo/roles')
+async def demo_roles():
+    return DEMO_ROLES
+
+
+@app.post('/demo/rooms')
+async def create_demo_room(request: Request):
+    body = await demo_body(request)
+    if set(body) != {'role_id'} or body['role_id'] not in [r['role_id'] for r in DEMO_ROLES]:
+        raise HTTPException(422, 'Choose a demo role')
+    for store in (demo_rooms, demo_sessions):
+        for key in list(store):
+            if store[key]['expires_at'] <= time.time():
+                del store[key]
+    if len(demo_rooms) >= 100:
+        raise HTTPException(429, 'Demo capacity reached; try later')
+    room = {'room_id': secrets.token_urlsafe(32), 'role_id': body['role_id'], 'expires_at': time.time() + 1800}
+    demo_rooms[room['room_id']] = room
+    return room
+
+
+@app.get('/demo/rooms/{room_id}')
+async def get_demo_room(room_id: str):
+    return demo_resource(demo_rooms, room_id)
+
+
+@app.post('/demo/rooms/{room_id}/sessions')
+async def create_demo_session(room_id: str, request: Request):
+    body = await demo_body(request)
+    if set(body) != {'acknowledged'} or body['acknowledged'] is not True:
+        raise HTTPException(422, 'Explicit demo acknowledgement required')
+    room = demo_resource(demo_rooms, room_id)
+    for session in demo_sessions.values():
+        if session['room_id'] == room_id:
+            return session
+    session = {'session_id': secrets.token_urlsafe(32), 'room_id': room_id, 'status': 'active',
+               'acknowledged_at': time.time(), 'expires_at': room['expires_at'], 'ended_at': None}
+    demo_sessions[session['session_id']] = session
+    return session
+
+
+@app.get('/demo/sessions/{session_id}')
+async def get_demo_session(session_id: str):
+    return demo_resource(demo_sessions, session_id)
+
+
+@app.post('/demo/sessions/{session_id}/end')
+async def end_demo_session(session_id: str):
+    session = demo_resource(demo_sessions, session_id)
+    if session['status'] != 'ended':
+        session.update(status='ended', ended_at=time.time())
+    return session
 
 
 @app.middleware('http')

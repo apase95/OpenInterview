@@ -23,3 +23,64 @@ h1 { margin: 26px 0; font-size: 84px; line-height: 1; letter-spacing: -3px; back
 .preview-row:last-child { font-size: 13px; }
 .robot { text-align: center; margin: 32px 0 40px; }
 .robot img { display: inline-block; }
+
+.candidate { max-width: 1328px; padding: 48px 24px 80px; }
+.candidate h1 { font-size: clamp(30px, 4vw, 40px); letter-spacing: -1px; line-height: 1.15; background: none; color: #eee5ff; margin: 0 0 16px; }
+.candidate h2 { font-size: 23px; margin: 12px 0; }
+.candidate p { line-height: 1.65; }
+.candidate .subtitle { font-size: 16px; margin: 0 0 32px; }
+.eyebrow { color: #d0b2f7; font-size: 12px; font-weight: 700; letter-spacing: 1.4px; }
+.demo-nav { max-width: 1328px; min-height: 48px; padding: 0 24px; display: flex; justify-content: space-between; align-items: center; gap: 24px; position: relative; }
+.demo-nav > div > a { display: inline-flex; align-items: center; min-height: 36px; font-size: 14px; font-weight: 400; line-height: 20px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; flex-shrink: 0; }
+.brand-mark { display: block; width: 24px; height: 24px; overflow: hidden; }
+.brand-mark img { display: block; max-width: none; width: 130.4px; height: 24px; }
+.account-control { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; }
+.account-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-control button { background: none; border: 0; color: inherit; min-height: 36px; }
+.workspace-label { position: absolute; left: 50%; transform: translateX(-50%); color: #bcb1cb; font-size: 14px; }
+.demo-nav [aria-current="page"] { color: #eee5ff; text-decoration: underline; text-underline-offset: 8px; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; margin: 0 0 28px; list-style: none; color: #bcb1cb; font-size: 14px; border: 1px solid #352940; border-radius: 10px; width: fit-content; }
+.steps li { padding: 10px 16px; border-radius: 6px; }
+.steps [aria-current] { color: #f0dbff; background: #271b36; }
+.role-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.demo-card { background: #100c1a; border: 1px solid #352940; border-radius: 16px; padding: 28px; }
+.role-heading { display: flex; align-items: center; gap: 16px; min-height: 60px; }
+.role-heading h2 { margin: 0; }
+.role-icon { padding: 9px; border: 1px solid #352940; border-radius: 12px; color: #d0b2f7; flex-shrink: 0; }
+.role-choice { display: flex; justify-content: space-between; width: 100%; padding: 20px 0 0; margin-top: 22px; border: 0; border-top: 1px solid #352940; background: none; color: #d0b2f7; min-height: 44px; text-align: left; }
+.role-card:focus-within, .role-card:hover { border-color: #9870c2; }
+.demo-card p { color: #cfc4dc; }
+.demo-card .button { margin-top: 16px; gap: 14px; }
+.narrow { max-width: 720px; margin: 24px auto; }
+.invitation { margin-top: 32px; }
+.invitation h2 { margin-top: 0; }
+.candidate input:not([type=checkbox]) { display: block; width: min(100%, 560px); padding: 13px; margin-top: 10px; border: 1px solid #9a81ad; border-radius: 8px; background: #0b0812; color: #fff; }
+.check { display: flex; align-items: flex-start; gap: 12px; margin-top: 24px; line-height: 1.6; }
+.check input { margin-top: 6px; width: 18px; height: 18px; flex-shrink: 0; }
+.room-code { overflow-wrap: anywhere; user-select: all; }
+.text-link { display: inline-block; margin: 20px; text-decoration: underline; }
+.demo-stage { text-align: center; max-width: 800px; margin: auto; }
+.demo-stage img { display: block; margin: 16px auto 32px; }
+.notice { padding: 18px; border: 1px solid #e4b684; border-radius: 10px; margin-bottom: 20px; color: #ffe1bd; }
+button, input, summary { font: inherit; }
+button, summary { cursor: pointer; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #e1caff; outline-offset: 4px; }
+.candidate .actions { flex-wrap: wrap; justify-content: flex-start; margin: 20px 0; }
+@media (max-width: 760px) {
+  .workspace-label { display: none; }
+  .demo-nav { flex-wrap: wrap; gap: 12px; padding: 8px 16px; }
+  .demo-nav > div { gap: 16px; font-size: 14px; }
+  .brand { font-size: 16px; }
+  .candidate { padding: 32px 16px 56px; }
+  .steps li { padding: 8px 10px; }
+  .role-grid { grid-template-columns: 1fr; }
+  nav { padding: 0 16px; }
+  nav > div { gap: 12px; }
+  .hero { padding: 42px 20px; }
+  h1 { font-size: 52px; letter-spacing: -2px; }
+  .actions { flex-wrap: wrap; }
+  .preview { margin: 0 16px; }
+  .demo-card { padding: 22px; }
+}

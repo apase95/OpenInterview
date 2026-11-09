@@ -49,7 +49,10 @@ class ContainerSmoke(unittest.TestCase):
     def test_home_scope(self):
         root = Path(__file__).resolve().parents[1]
         page = (root / 'app/page.tsx').read_text()
-        self.assertIn('h-14', page)
+        self.assertIn('className="demo-nav"', page)
+        css = (root / 'app/globals.css').read_text()
+        self.assertIn('min-height: 48px', css)
+        self.assertIn('width: 24px; height: 24px', css)
         for removed in ('className="badge"', 'AI is speaking', '>Example<', 'waveform'):
             self.assertNotIn(removed, page)
         self.assertTrue((root / 'app/globals.css').read_text().startswith('@import "tailwindcss";'))

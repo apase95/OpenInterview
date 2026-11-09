@@ -33,6 +33,8 @@ After one-time setup in that guide, `npm run test:voice` starts the API, named
 worker and isolated `/local-voice` frontend in one terminal; Ctrl+C stops them.
 It contacts cloud services and may cost money. This is not interview-controller
 integration or production readiness.
+Local pipeline evidence and two-sided replay are separately opt-in and require
+specific recording consent; see the development guide. Capture is off by default.
 
 ## Stack
 

@@ -169,7 +169,16 @@ def main():
         files = list((web / '.next/static').rglob('*'))
         assert any(path.is_file() for path in files)
         assert 'aria-label="Main navigation"' in html and 'href="/login"' in html
-        assert any('min-height:48px' in path.read_text() for path in files if path.suffix == '.css')
+        css = ''.join(''.join(path.read_text().split()) for path in files if path.suffix == '.css')
+        assert 'min-h-12' in html and 'size-6 overflow-hidden' in html
+        for utility in ('.min-h-12{min-height:calc(var(--spacing)*12)}',
+                        '.size-6{width:calc(var(--spacing)*6);height:calc(var(--spacing)*6)}',
+                        '.justify-items-center{justify-items:center}',
+                        '.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}',
+                        '@media(max-width:760px)', '@media(max-width:480px)',
+                        '--spacing:.25rem', '--color-page:#0b0812'):
+            assert utility in css, utility
+        assert '.demo-nav{' not in css and '.auth-card{' not in css
         for path in files:
             if path.is_file():
                 assert SENTINEL.encode() not in path.read_bytes(), str(path)

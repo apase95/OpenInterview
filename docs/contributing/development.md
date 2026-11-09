@@ -16,6 +16,11 @@ local voice sessions; it is disabled outside development and loopback hosts.
 a static illustration, not a live session. Home keeps the user-trimmed content:
 no badge, Example chip, speaking/waveform or bottom disclaimer. Tailwind v4 is
 compiled through PostCSS; the navbar is 48 px with a 24 px logo, Roles and Sign in links.
+Components use static Tailwind v4 utilities, including arbitrary values for the
+existing gradients and responsive sizes. `app/globals.css` holds shared `@theme`
+colors/font and small global accessibility defaults, not component selectors.
+Keep complete utility names in source so Tailwind can detect them; no v3 config
+or extra class-name dependency is needed.
 
 Tested: Node 24.12.0, npm 11.6.2, Python 3.12 and 3.14.8 on Linux. Web versions are pinned
 in package.json/lockfile. Docker pins PostgreSQL 16.11 locally; broader version

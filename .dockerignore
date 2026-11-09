@@ -12,7 +12,6 @@
 !app/auth-ui/
 !app/auth-ui/AccountControl.tsx
 !app/auth-ui/AuthCard.tsx
-!app/auth-ui/auth.css
 !app/login/
 !app/login/page.tsx
 !app/signup/

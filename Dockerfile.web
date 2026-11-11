@@ -4,19 +4,18 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 FROM deps AS build
-ENV NEXT_TELEMETRY_DISABLED=1
+ARG API_BACKEND_URL=http://api:8000
+ENV NEXT_TELEMETRY_DISABLED=1 API_BACKEND_URL=${API_BACKEND_URL}
 COPY tsconfig.json next-env.d.ts next.config.mjs postcss.config.mjs ./
-COPY app/layout.tsx app/page.tsx app/globals.css ./app/
-COPY app/auth-ui/AccountControl.tsx app/auth-ui/AuthCard.tsx ./app/auth-ui/
-COPY app/login/page.tsx ./app/login/
-COPY app/signup/page.tsx ./app/signup/
-COPY app/roles/page.tsx ./app/roles/
-COPY public/images/logo.svg public/images/robot.svg ./public/images/
+COPY proxy.ts ./
+COPY lib ./lib
+COPY app ./app
+COPY public/images/logo.svg public/images/logo-light.svg public/images/robot.svg ./public/images/
 RUN npm run build
 
 FROM node:24.12.0-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000 API_BACKEND_URL=http://api:8000
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public

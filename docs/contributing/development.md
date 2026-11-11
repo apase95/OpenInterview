@@ -12,7 +12,7 @@ Install the backend test requirements before running offline tests.
 Implemented: static desktop Home, independent FastAPI liveness, and a long-running
 idle worker scaffold by default. The opt-in `/local-voice` client below supports
 local voice sessions; it is disabled outside development and loopback hosts.
-`/roles` provides the opt-in candidate demo below; `/login` and `/signup` provide Google auth. The preview is
+`/roles` lists account-assigned preparation rooms; `/login` provides Google auth. `/signup` redirects to `/login`. The preview is
 a static illustration, not a live session. Home keeps the user-trimmed content:
 no badge, Example chip, speaking/waveform or bottom disclaimer. Tailwind v4 is
 compiled through PostCSS; the navbar is 48 px with a 24 px logo, Roles and Sign in links.
@@ -90,7 +90,7 @@ Do not use your Gemini API key as an OAuth credential. No voice setup is needed.
 .venv/bin/python -m backend.auth migrate --env-file .env
 .venv/bin/python -m backend.auth check --env-file .env
 npm run test:auth
-# Open http://127.0.0.1:3000/login or /signup
+# Open http://127.0.0.1:3000/login
 ```
 
 The launcher runs `backend.auth check --env-file .env` before startup to validate configuration,
@@ -101,79 +101,35 @@ Ctrl+C/SIGTERM or a child failure cleans up only owned process groups.
 Readiness means API `/health` and frontend `/login` respond, not successful OAuth.
 Restart after editing UI source (the frontend is an isolated copy).
 
-The button navigates to same-origin
-`/auth/google/start?return_to=/roles&intent=signin` (or `intent=signup`). Google
-callback URI is `http://127.0.0.1:8000/auth/google/callback`; backend app origin
-is `http://127.0.0.1:3000`. Use `127.0.0.1` consistently, not `localhost`.
-Only clicking Continue contacts Google. New accounts are candidates, not HR/Admin.
-Errors show fixed safe text; unknown error query values never appear in the UI.
-The demo remains unauthenticated synthetic data, not real room authorization.
+The button navigates to `/api/auth/google/start?return_to=<allowlisted-path>`.
+Google callback configuration remains `/auth/google/callback`; Next keeps that
+legacy callback rewrite. Use one hostname consistently. New users remain candidates.
 
-Next rewrites `/auth/:path*` to `http://127.0.0.1:8000` by default. A separate,
-credential-free frontend environment may set server-only `AUTH_BACKEND_URL` to
-an HTTP(S) origin with no path, query or embedded credentials. The isolated dev
-helper forwards only this optional origin, never OAuth/session secrets. The auth
-launcher deliberately uses the local default. In production configure an internal
-backend origin or route `/auth/*` at your same-origin reverse proxy; retain cookies,
-Origin and CSRF checks. Do not expose the development voice API through that proxy.
-No browser token storage or auth guard for domain routes is added. Session/logout
-API details and deployment security requirements are in the backend auth guide.
-
-Offline checks: `node --test tests/auth-ui.test.mjs` and
-`.venv/bin/python -m unittest discover -s tests -p test_auth_launcher.py`.
-The isolated build check is `.venv/bin/python tests/verify_local.py`; never build
-from root with private dotenv. Live Google/browser/cookie and database checks need
-your explicit runtime setup and are not part of these mocked offline checks.
+All product requests use `/api/*` with same-origin cookies. Set server-only
+`API_BACKEND_URL` (or legacy `AUTH_BACKEND_URL`) to the backend origin for both
+build and runtime. Keep Origin, cookie and CSRF headers across the proxy. No
+browser API-base setting or hardcoded frontend CORS origin is required.
 
 ## Candidate demo (no cloud services)
 
-Run one API process, with no root dotenv and no voice worker:
+The old unauthenticated `/demo/*` capability API has been removed. See
+[routing and access setup](../architecture/web-routing.md) for the explicit
+PostgreSQL migration and account assignments. Preparation pages require a
+verified Google session and do not create candidate-owned practice rooms.
+
+Offline checks use stand-in identities/repositories, never Google or private
+configuration:
 
 ```sh
-APP_ENV=development CANDIDATE_DEMO_ENABLED=true .venv/bin/python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --no-proxy-headers --no-access-log
-npm run dev:local
-# Open http://127.0.0.1:3000/roles
+python -m unittest tests.test_google_auth tests.test_candidate_demo
+node --test tests/auth-ui.test.mjs tests/candidate-ui.test.mjs
+npm run build
 ```
 
-`dev:local` copies the candidate routes as well as local voice into its isolated
-web directory; it does not start a worker or load provider secrets. Restart after edits.
-The browser API base defaults to `http://127.0.0.1:8000`.
-For a separate credential-free Next environment, set
-`NEXT_PUBLIC_CANDIDATE_API_BASE=http://127.0.0.1:8001` before dev/build if the API
-uses port 8001. This public setting must contain only an API origin, never secrets.
-The isolated launcher deliberately uses the default API base.
-
-Endpoints: GET `/demo/roles`; POST `/demo/rooms` with exactly
-`{"role_id":"frontend"}`; GET `/demo/rooms/{room_id}`;
-POST `/demo/rooms/{room_id}/sessions` with exactly `{"acknowledged":true}`;
-GET `/demo/sessions/{session_id}`; POST `/demo/sessions/{session_id}/end`.
-Session creation returns the same session on retries, including after end;
-create a new room for a new demo. End is idempotent during the room lifetime.
-No tokens, provider calls, authentication, legal consent or v1 contract are implemented.
-Acknowledgement is explicitly demo-only; server time is recorded in memory.
-
-All demo routes are disabled unless both flags above are set. Requests must come
-from a loopback peer/Host and exact Origin `http://127.0.0.1:3000` or
-`http://localhost:3000`; no cookie or local voice secret is used. Keep the API on
-loopback without a proxy. Origin checking is not production authentication.
-Room/session IDs are private random capabilities: no list endpoint, URL sharing,
-browser storage or access logs. Anyone given a room code can access its synthetic
-session. Do not enter personal data. Bodies are limited to 1 KiB.
-Rooms expire in 30 minutes, with at most 100 rooms per process. Expired entries
-are removed on the next creation; restarting the single API process loses all
-demo state. Expired and unknown capabilities both return 404.
-
-The optional mic check requests permission only on click. Tracks stop on Stop,
-continue, end, pagehide or unmount, including late permission results. There is
-no recording, playback or upload, and access success is not an audio-quality check.
-The preparation stage has no live AI; no generated replies or connected status.
-End failure keeps media off and allows retry; leaving does not guarantee a server
-End request, so expiry is the fallback. `/local-voice` stays a separate protected tool.
-
-Offline smoke: `.venv/bin/python -m unittest discover -s tests -p test_candidate_demo.py`.
-Manual browser checks: choose a role; copy/open its demo code; acknowledge;
-allow/deny mic; stop or continue while permission is pending; finish; retry after
-API failure; check narrow layout and keyboard focus. Browser checks are not automated.
+The loopback-only `python -m tests.routing_browser_stub` harness serves fake
+identities on port 8011 for browser checks. Run a separate frontend with
+`API_BACKEND_URL=http://127.0.0.1:8011` on port 3001. This test harness is not a
+login mechanism for a normal backend and must never be deployed.
 
 ## Opt-in local voice conversation test
 

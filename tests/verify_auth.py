@@ -20,7 +20,7 @@ from unittest.mock import patch
 import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from backend import auth
+from backend import auth, workspace
 
 
 # %%
@@ -123,12 +123,50 @@ def main():
             with auth.connect() as c:
                 c.execute("UPDATE auth_sessions SET expires_at=now()-interval '1 second' WHERE token_hash=%s", (s.digest('session', other),))
             assert store.session(s, other) is None
+            # Exercise the real new migration and SQL; no provider or real data.
+            store.create_flow(s, state, browser, nonce, verifier, '/rooms/routing_room')
+            assert store.consume(s, state, browser)['return_to'] == '/rooms/routing_room'
+            candidate = store.session(s, fresh)
+            with auth.connect() as c:
+                second = c.execute("SELECT id FROM auth_accounts WHERE subject='subject-two'").fetchone()
+                c.execute("""INSERT INTO web_room_previews
+                    (id,candidate_id,campaign_id,campaign_name,role_id,opens_at,closes_at,timezone,contact)
+                    VALUES ('routing_room',%s,'scope-one','Synthetic scope','frontend',
+                            now()-interval '1 minute',now()+interval '30 minutes','UTC','hr@example.test')""", (first_id,))
+            repo = workspace.Store()
+            assert len(repo.rooms(candidate)) == 1
+            assert repo.rooms({'id': str(second['id'])}) == []
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                joined = list(pool.map(lambda _: repo.join(candidate, 'routing_room'), range(2)))
+            assert joined[0]['id'] == joined[1]['id']
+            preview_id = joined[0]['id']
+            try:
+                repo.session({'id': str(second['id'])}, preview_id)
+            except workspace.HTTPException as error:
+                assert error.status_code == 404
+            else:
+                raise AssertionError('Cross-account session access accepted')
+            ended = repo.session(candidate, preview_id, True)
+            assert ended == repo.session(candidate, preview_id, True)
+            assert repo.join(candidate, 'routing_room')['ended_at'] == ended['ended_at']
+            with auth.connect() as c:
+                grant_id = uuid.uuid4()
+                c.execute("""INSERT INTO web_access_grants(id,account_id,permission,campaign_id,granted_by)
+                    VALUES (%s,%s,'hr','scope-one',%s)""", (grant_id, first_id, first_id))
+            assert store.session(s, fresh)['grants'] == []
+            with auth.connect() as c:
+                c.execute('UPDATE web_access_grants SET confirmed_at=now() WHERE id=%s', (grant_id,))
+            assert store.session(s, fresh)['grants'] == [{'permission': 'hr', 'campaign_id': 'scope-one'}]
+            with auth.connect() as c:
+                c.execute('UPDATE web_access_grants SET revoked_at=now() WHERE id=%s', (grant_id,))
+            assert store.session(s, fresh)['grants'] == []
             docker('restart', name)
             port = docker('port', name, '5432/tcp').rsplit(':', 1)[1]
             os.environ['DATABASE_PORT'] = port
             admin['port'] = port
             wait(admin)
             assert store.session(s, fresh)['id'] == first_id
+            assert repo.session(candidate, preview_id)['ended_at'] == ended['ended_at']
             store.logout(s, fresh)
             assert store.session(s, fresh) is None
             result = subprocess.run([sys.executable, '-m', 'backend.auth', 'check'], env=dict(os.environ),

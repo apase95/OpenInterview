@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 from pathlib import Path
 import secrets
 import time
@@ -24,7 +25,7 @@ from psycopg.rows import dict_row
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from authlib.jose import JsonWebToken
 from authlib.oidc.core import CodeIDToken
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
@@ -34,6 +35,7 @@ AUTHORIZE = ISSUER + '/o/oauth2/v2/auth'
 TOKEN = 'https://oauth2.googleapis.com/token'
 JWKS = 'https://www.googleapis.com/oauth2/v3/certs'
 MIGRATION = Path(__file__).with_name('migrations') / '002_auth.sql'
+WEB_MIGRATION = Path(__file__).with_name('migrations') / '003_web_access.sql'
 router = APIRouter(prefix='/auth')
 
 
@@ -106,9 +108,12 @@ def settings():
     return Settings(*values, secure, ttl)
 
 
-# Only fixed local destinations survive the login round trip.
+# Reject encodings, queries, fragments, separators and external destinations.
 def return_path(value):
-    return value if value in ('/', '/roles') else '/'
+    if not isinstance(value, str):
+        return '/'
+    return value if re.fullmatch(r'(?:/|/roles|/hr|/admin|/rooms/[A-Za-z0-9_-]{3,80}|/sessions/[A-Za-z0-9_-]{3,80}/interview)', value, flags=re.ASCII) else '/'
+
 
 
 # %%
@@ -138,6 +143,9 @@ def check(connection):
     row = connection.execute('SELECT sha256 FROM auth_migrations WHERE version=1').fetchone()
     if not row or row['sha256'] != checksum():
         raise ValueError('Run explicit auth migration; checksum must match')
+    web = connection.execute('SELECT sha256 FROM auth_migrations WHERE version=2').fetchone()
+    if not web or web['sha256'] != hashlib.sha256(WEB_MIGRATION.read_bytes()).hexdigest():
+        raise ValueError('Run explicit web access migration; checksum must match')
 
 
 # Serialize explicit migration attempts with a transaction-scoped advisory lock.
@@ -149,14 +157,18 @@ def migrate(connection):
             raise ValueError('Use a non-admin application DB role')
         connection.execute('SELECT pg_advisory_xact_lock(704193002)')
         connection.execute('CREATE TABLE IF NOT EXISTS auth_migrations (version integer PRIMARY KEY, sha256 text NOT NULL)')
-        row = connection.execute('SELECT sha256 FROM auth_migrations WHERE version=1').fetchone()
-        if row:
-            if row['sha256'] != checksum():
-                raise ValueError('Auth migration checksum mismatch')
-            return False
-        connection.execute(MIGRATION.read_text())
-        connection.execute('INSERT INTO auth_migrations VALUES (1,%s)', (checksum(),))
-        return True
+        changed = False
+        for version, source in ((1, MIGRATION), (2, WEB_MIGRATION)):
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            row = connection.execute('SELECT sha256 FROM auth_migrations WHERE version=%s', (version,)).fetchone()
+            if row:
+                if row['sha256'] != digest:
+                    raise ValueError('Auth migration checksum mismatch')
+                continue
+            connection.execute(source.read_text())
+            connection.execute('INSERT INTO auth_migrations VALUES (%s,%s)', (version, digest))
+            changed = True
+        return changed
 
 
 # %%
@@ -198,12 +210,16 @@ class Store:
 
     def session(self, s, token):
         """Resolve an unexpired session and current account role, or return no row."""
-        row = self.run(lambda c: c.execute('''SELECT a.id,a.email,a.name,a.role FROM auth_sessions s
-            JOIN auth_accounts a ON a.id=s.account_id WHERE s.token_hash=%s AND s.expires_at>now()''',
-            (s.digest('session', token),)).fetchone())
-        if row:
-            row['id'] = str(row['id'])
-        return row
+        def action(c):
+            row = c.execute('''SELECT a.id,a.email,a.name,a.role FROM auth_sessions s
+                JOIN auth_accounts a ON a.id=s.account_id WHERE s.token_hash=%s AND s.expires_at>now()''',
+                (s.digest('session', token),)).fetchone()
+            if row:
+                row['id'] = str(row['id'])
+                row['grants'] = c.execute('''SELECT permission,campaign_id FROM web_access_grants
+                    WHERE account_id=%s AND confirmed_at IS NOT NULL AND revoked_at IS NULL''', (row['id'],)).fetchall()
+            return row
+        return self.run(action)
 
     def logout(self, s, token):
         """Revoke only the supplied session hash."""
@@ -293,8 +309,8 @@ def cookie(response, s, name, value, age):
 
 
 # Clear the flow capability and redirect using a caller-selected fixed error code.
-def failure(s, error):
-    response = RedirectResponse(s.origin + '/login?error=' + error, status_code=303)
+def failure(s, error, target='/'):
+    response = RedirectResponse(s.origin + '/login?error=' + error + '&return_to=' + return_path(target), status_code=303)
     cookie(response, s, s.flow_cookie, '', 0)
     return response
 
@@ -310,11 +326,11 @@ async def start(request: Request):
     try:
         location = await provider.authorization(s, state, nonce, verifier)
     except Exception:
-        return failure(s, 'provider_unavailable')
+        return failure(s, 'provider_unavailable', target)
     try:
         await run_in_threadpool(store.create_flow, s, state, browser, nonce, verifier, target)
     except Exception:
-        return failure(s, 'service_unavailable')
+        return failure(s, 'service_unavailable', target)
     response = RedirectResponse(location, status_code=303)
     cookie(response, s, s.flow_cookie, browser, 600)
     return response
@@ -337,25 +353,47 @@ async def callback(request: Request):
     if not flow:
         return failure(s, 'state_invalid')
     if params.get('error'):
-        return failure(s, 'access_denied' if params['error'] == 'access_denied' else 'identity_invalid')
+        return failure(s, 'access_denied' if params['error'] == 'access_denied' else 'identity_invalid', flow['return_to'])
     code = params.get('code', '')
     if not code or len(code) > 4096:
-        return failure(s, 'identity_invalid')
+        return failure(s, 'identity_invalid', flow['return_to'])
     try:
         claims = await provider.identity(s, code, flow)
     except httpx.HTTPError:
-        return failure(s, 'provider_unavailable')
+        return failure(s, 'provider_unavailable', flow['return_to'])
     except Exception:
-        return failure(s, 'identity_invalid')
+        return failure(s, 'identity_invalid', flow['return_to'])
     token = secrets.token_urlsafe(32)
     try:
         await run_in_threadpool(store.login, s, claims, token, request.cookies.get(s.cookie, ''))
     except Exception:
-        return failure(s, 'service_unavailable')
+        return failure(s, 'service_unavailable', flow['return_to'])
     response = RedirectResponse(s.origin + return_path(flow['return_to']), status_code=303)
     cookie(response, s, s.cookie, token, s.ttl)
     cookie(response, s, s.flow_cookie, '', 0)
     return response
+
+
+async def require_user(request: Request, permission=None, mutation=False):
+    try:
+        s = settings()
+    except (ValueError, TypeError):
+        raise HTTPException(503, 'auth_unavailable') from None
+    token = request.cookies.get(s.cookie, '')
+    if not token or len(token) > 128:
+        raise HTTPException(401, 'unauthenticated')
+    try:
+        user = await run_in_threadpool(store.session, s, token)
+    except Exception:
+        raise HTTPException(503, 'service_unavailable') from None
+    if not user:
+        raise HTTPException(401, 'unauthenticated')
+    if mutation and (request.headers.get('origin') != s.origin or not hmac.compare_digest(
+            request.headers.get('x-csrf-token', '').encode(), s.digest('csrf', token).encode())):
+        raise HTTPException(403, 'csrf_invalid')
+    if permission and not any(g['permission'] == permission for g in user.get('grants', [])):
+        raise HTTPException(403, 'access_denied')
+    return user
 
 
 # Return current identity and a session-bound CSRF digest, not the cookie token.

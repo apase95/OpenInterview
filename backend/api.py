@@ -1,9 +1,9 @@
 # %%
-"""Serve health probes and opt-in local demo and voice routes.
+"""Serve health probes, authorized preparation and opt-in local voice routes.
 
-Demo capabilities contain synthetic, process-local state. Voice uses remote room
-leases, but its lock and rate counter remain local to each process. The auth
-router is independent; specified v1 domain operations are not mounted here.
+Preparation rooms use durable account assignments. Voice uses remote room
+leases, but its lock and rate counter remain local to each process. The specified
+v1 hiring domain operations are not mounted here.
 """
 import asyncio
 from collections import deque
@@ -137,130 +137,24 @@ from backend.auth import router as auth_router, boundary as auth_boundary
 app.include_router(auth_router)
 app.middleware('http')(auth_boundary)
 
-# Synthetic, process-local capabilities only. Never used by voice or v1 routes.
-demo_rooms = {}
-demo_sessions = {}
-DEMO_ROLES = [{'role_id': key, 'name': name} for key, name in (
-    ('ba', 'Business Analyst'), ('devops', 'DevOps'), ('fullstack', 'Fullstack'),
-    ('frontend', 'Frontend'), ('backend', 'Backend'), ('ai', 'AI Engineer'))]
-
-
-# %%
-# Restrict synthetic routes to explicit development mode, loopback and fixed
-# frontend origins. Bodies are bounded before downstream JSON parsing.
 @app.middleware('http')
-async def candidate_demo_boundary(request: Request, call_next):
-    if not request.url.path.startswith('/demo/'):
+async def workspace_boundary(request: Request, call_next):
+    if not request.url.path.startswith('/workspace/'):
         return await call_next(request)
-    headers = {'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'}
-    try:
-        if os.getenv('APP_ENV') != 'development' or os.getenv('CANDIDATE_DEMO_ENABLED') != 'true':
-            raise HTTPException(404, 'Not found')
-        if (not request.client or not ipaddress.ip_address(request.client.host).is_loopback
-                or request.url.hostname not in ('localhost', '127.0.0.1', '::1')):
-            raise HTTPException(403, 'Local access required')
-        origin = request.headers.get('origin', '')
-        if origin not in ('http://127.0.0.1:3000', 'http://localhost:3000'):
-            raise HTTPException(403, 'Origin denied')
-        headers.update({'Access-Control-Allow-Origin': origin, 'Vary': 'Origin'})
-        if request.method == 'OPTIONS':
-            if (request.headers.get('access-control-request-method') not in ('GET', 'POST')
-                    or request.headers.get('access-control-request-headers', '').lower() not in ('', 'content-type')):
-                raise HTTPException(403, 'Preflight denied')
-            return Response(status_code=204, headers={**headers, 'Access-Control-Allow-Methods': 'GET, POST',
-                                                      'Access-Control-Allow-Headers': 'Content-Type'})
-        body = bytearray()
-        async for chunk in request.stream():
-            body.extend(chunk)
-            if len(body) > 1024:
-                raise HTTPException(413, 'Body too large')
-        request._body = bytes(body)
-        response = await call_next(request)
-        response.headers.update(headers)
-        return response
-    except (ValueError, HTTPException) as error:
-        return JSONResponse({'detail': error.detail if isinstance(error, HTTPException) else 'Local access required'},
-                            status_code=error.status_code if isinstance(error, HTTPException) else 403, headers=headers)
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > 2048:
+            return JSONResponse({'detail': 'Body too large'}, status_code=413,
+                                headers={'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'})
+    request._body = bytes(body)
+    response = await call_next(request)
+    response.headers.update({'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'})
+    return response
 
 
-# An unexpired random ID is a demo capability, not an account identity.
-def demo_resource(store, key):
-    resource = store.get(key)
-    if not resource or resource['expires_at'] <= time.time():
-        raise HTTPException(404, 'Demo expired or not found')
-    return resource
-
-
-# Require a JSON object; routes separately check the exact allowed fields.
-async def demo_body(request):
-    try:
-        body = await request.json()
-        if not isinstance(body, dict):
-            raise ValueError()
-        return body
-    except ValueError:
-        raise HTTPException(422, 'Invalid demo input') from None
-
-
-# Return the fixed synthetic catalog without database or provider access.
-@app.get('/demo/roles')
-async def demo_roles():
-    return DEMO_ROLES
-
-
-# Remove expired capabilities before enforcing the process-local room limit.
-@app.post('/demo/rooms')
-async def create_demo_room(request: Request):
-    body = await demo_body(request)
-    if set(body) != {'role_id'} or body['role_id'] not in [r['role_id'] for r in DEMO_ROLES]:
-        raise HTTPException(422, 'Choose a demo role')
-    for store in (demo_rooms, demo_sessions):
-        for key in list(store):
-            if store[key]['expires_at'] <= time.time():
-                del store[key]
-    if len(demo_rooms) >= 100:
-        raise HTTPException(429, 'Demo capacity reached; try later')
-    room = {'room_id': secrets.token_urlsafe(32), 'role_id': body['role_id'], 'expires_at': time.time() + 1800}
-    demo_rooms[room['room_id']] = room
-    return room
-
-
-# Missing and expired room capabilities share the same lookup failure.
-@app.get('/demo/rooms/{room_id}')
-async def get_demo_room(room_id: str):
-    return demo_resource(demo_rooms, room_id)
-
-
-# Require acknowledgement and reuse any session already bound to this room,
-# including an ended one. No real media or interview service is started.
-@app.post('/demo/rooms/{room_id}/sessions')
-async def create_demo_session(room_id: str, request: Request):
-    body = await demo_body(request)
-    if set(body) != {'acknowledged'} or body['acknowledged'] is not True:
-        raise HTTPException(422, 'Explicit demo acknowledgement required')
-    room = demo_resource(demo_rooms, room_id)
-    for session in demo_sessions.values():
-        if session['room_id'] == room_id:
-            return session
-    session = {'session_id': secrets.token_urlsafe(32), 'room_id': room_id, 'status': 'active',
-               'acknowledged_at': time.time(), 'expires_at': room['expires_at'], 'ended_at': None}
-    demo_sessions[session['session_id']] = session
-    return session
-
-
-# Session visibility ends at its inherited room expiry.
-@app.get('/demo/sessions/{session_id}')
-async def get_demo_session(session_id: str):
-    return demo_resource(demo_sessions, session_id)
-
-
-# Repeatable termination preserves the first synthetic end time.
-@app.post('/demo/sessions/{session_id}/end')
-async def end_demo_session(session_id: str):
-    session = demo_resource(demo_sessions, session_id)
-    if session['status'] != 'ended':
-        session.update(status='ended', ended_at=time.time())
-    return session
+from backend.workspace import router as workspace_router
+app.include_router(workspace_router)
 
 
 # %%

@@ -1,13 +1,19 @@
-export function authBackend(value) {
-  const url = new URL(value || 'http://127.0.0.1:8000');
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
-      url.pathname !== '/' || url.search || url.hash) throw new Error('AUTH_BACKEND_URL must be an HTTP(S) origin without credentials.');
-  return url.origin;
-}
+import { backendOrigin } from "./lib/backend.mjs";
+export { backendOrigin as authBackend } from "./lib/backend.mjs";
 
+// Browsers reach only the auth and workspace APIs. Developer-only backend
+// routes such as /local/voice and /health are never proxied.
 export default {
-  output: 'standalone',
+  output: "standalone",
+  async redirects() {
+    return [{ source: "/signup", destination: "/login", permanent: true }];
+  },
   async rewrites() {
-    return [{ source: '/auth/:path*', destination: `${authBackend(process.env.AUTH_BACKEND_URL)}/auth/:path*` }];
+    const origin = backendOrigin();
+    return [
+      { source: "/api/auth/:path*", destination: `${origin}/auth/:path*` },
+      { source: "/api/workspace/:path*", destination: `${origin}/workspace/:path*` },
+      { source: "/auth/:path*", destination: `${origin}/auth/:path*` },
+    ];
   },
 };

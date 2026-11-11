@@ -1,0 +1,162 @@
+/* Shared semantic colors for every page. Dark remains the default. */
+:root {
+  color-scheme: dark;
+  --oi-bg: #0b0812;
+  --oi-fg: #eee8f7;
+  --oi-muted: #bcb2ca;
+  --oi-faint: #a697b8;
+  --oi-surface: #110c1c;
+  --oi-inset: #0d0914;
+  --oi-raised: #1a1226;
+  --oi-panel: #140d20;
+  --oi-border: #352a45;
+  --oi-border-strong: #49365f;
+  --oi-border-accent: #9167b9;
+  --oi-accent: #d7b8fb;
+  --oi-accent-strong: #f3e7ff;
+  --oi-accent-bg: #1b1229;
+  --oi-accent-border: #b47ce3;
+  --oi-focus: #dab9ff;
+  --oi-primary: #7635ce;
+  --oi-primary-hover: #8d4ed4;
+  --oi-on-primary: #ffffff;
+  --oi-hover: #261a36;
+  --oi-notice-fg: #dfc9f4;
+  --oi-success-fg: #b2e2c7;
+  --oi-success-bg: #10221b;
+  --oi-success-border: #325346;
+  --oi-warning-fg: #e7cca0;
+  --oi-warning-bg: #282016;
+  --oi-warning-border: #4a3b27;
+  --oi-google-bg: #f4f0fa;
+  --oi-google-fg: #24162e;
+  --oi-google-border: #ffffff;
+  --oi-google-hover: #dfd1ed;
+  --oi-muted-control: #37203e;
+  --oi-danger: #9d3f55;
+  --oi-danger-border: #cf7183;
+  --oi-danger-fg: #f0b3c0;
+  --oi-danger-bg: #351823;
+  --oi-glow: #3d1b595e;
+  --oi-stage-center: #2e1646;
+  --oi-stage-mid: #160d23;
+  --oi-stage-edge: #100b1b;
+  --oi-orbit-border: #9b64c81a;
+  --oi-orbit-glow: #6e339e26;
+  --oi-dot: #ba8cf1;
+  --oi-hero-top: #f3ecff;
+  --oi-hero-bottom: #be9be7;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --oi-bg: #faf8fd;
+  --oi-fg: #281b38;
+  --oi-muted: #675a76;
+  --oi-faint: #736280;
+  --oi-surface: #ffffff;
+  --oi-inset: #f5f0fa;
+  --oi-raised: #f0e8f8;
+  --oi-panel: #ffffff;
+  --oi-border: #ded3e8;
+  --oi-border-strong: #c6b2d8;
+  --oi-border-accent: #9872b8;
+  --oi-accent: #7038a5;
+  --oi-accent-strong: #4c1b77;
+  --oi-accent-bg: #eee3f9;
+  --oi-accent-border: #8e59bb;
+  --oi-focus: #7b35b9;
+  --oi-primary: #7635ce;
+  --oi-primary-hover: #6124af;
+  --oi-on-primary: #ffffff;
+  --oi-hover: #e8d9f4;
+  --oi-notice-fg: #67348b;
+  --oi-success-fg: #256246;
+  --oi-success-bg: #eaf7ef;
+  --oi-success-border: #9ccbb1;
+  --oi-warning-fg: #77501a;
+  --oi-warning-bg: #fff5df;
+  --oi-warning-border: #dfc491;
+  --oi-google-bg: #ffffff;
+  --oi-google-fg: #281b38;
+  --oi-google-border: #c6b2d8;
+  --oi-google-hover: #f5f0fa;
+  --oi-muted-control: #e6d5f2;
+  --oi-danger: #a93250;
+  --oi-danger-border: #a93250;
+  --oi-danger-fg: #9a2944;
+  --oi-danger-bg: #fcebf0;
+  --oi-glow: #d7b5f05e;
+  --oi-stage-center: #e9d9f8;
+  --oi-stage-mid: #f5edfc;
+  --oi-stage-edge: #fdfbff;
+  --oi-orbit-border: #9b64c826;
+  --oi-orbit-glow: #9b64c81a;
+  --oi-dot: #8545ba;
+  --oi-hero-top: #352047;
+  --oi-hero-bottom: #8750b5;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--oi-border);
+  border-radius: 9px;
+  background: var(--oi-surface);
+  color: var(--oi-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.theme-toggle:hover {
+  color: var(--oi-accent);
+  background: var(--oi-raised);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--oi-focus);
+  outline-offset: 4px;
+}
+.theme-to-light,
+.theme-to-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-to-dark,
+:root[data-theme="light"] .theme-to-light {
+  display: none;
+}
+:root[data-theme="light"] .theme-to-dark {
+  display: inline-flex;
+}
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.brand-logo img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.brand-logo .logo-light,
+:root[data-theme="light"] .brand-logo .logo-dark {
+  display: none;
+}
+:root[data-theme="light"] .brand-logo .logo-light {
+  display: block;
+}
+@media (max-width: 650px) {
+  .theme-toggle {
+    width: 36px;
+    padding: 7px;
+    flex-shrink: 0;
+  }
+  .theme-toggle span > span {
+    display: none;
+  }
+}

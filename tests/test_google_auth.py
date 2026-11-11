@@ -114,13 +114,13 @@ class AuthSmoke(unittest.TestCase):
             # Another browser cannot consume the flow.
             with TestClient(app) as other:
                 response = other.get('/auth/google/callback', params={'state': state, 'code': 'synthetic'}, follow_redirects=False)
-                self.assertTrue(response.headers['location'].endswith('error=state_invalid'))
+                self.assertTrue(parse_qs(urlsplit(response.headers['location']).query).get('error') == ['state_invalid'])
             response = client.get('/auth/google/callback', params={'state': state, 'code': 'synthetic'}, follow_redirects=False)
             self.assertEqual(response.headers['location'], ENV['APP_ORIGIN'] + '/')
             old = client.cookies.get('oi_session_dev')
             self.assertEqual(client.get('/auth/me').json()['user']['role'], 'candidate')
             response = client.get('/auth/google/callback', params={'state': state, 'code': 'synthetic'}, follow_redirects=False)
-            self.assertTrue(response.headers['location'].endswith('error=state_invalid'))
+            self.assertTrue(parse_qs(urlsplit(response.headers['location']).query).get('error') == ['state_invalid'])
             state = begin()
             client.get('/auth/google/callback', params={'state': state, 'code': 'synthetic'}, follow_redirects=False)
             self.assertNotEqual(old, client.cookies.get('oi_session_dev'))
@@ -133,7 +133,7 @@ class AuthSmoke(unittest.TestCase):
             self.assertEqual(client.get('/auth/me').status_code, 401)
             state = begin()
             response = client.get('/auth/google/callback', params={'state': state, 'error': 'access_denied', 'error_description': 'PRIVATE'}, follow_redirects=False)
-            self.assertTrue(response.headers['location'].endswith('error=access_denied'))
+            self.assertTrue(parse_qs(urlsplit(response.headers['location']).query).get('error') == ['access_denied'])
             self.assertNotIn('PRIVATE', str(response.headers))
 
     def test_signed_oidc_through_mock_transport(self):
@@ -201,12 +201,12 @@ class AuthSmoke(unittest.TestCase):
         with patch.dict(os.environ, ENV, clear=True), TestClient(app) as client:
             with patch.object(auth.provider, 'authorization', new=AsyncMock(side_effect=httpx.ConnectError('PRIVATE'))):
                 response = client.get('/auth/google/start', follow_redirects=False)
-                self.assertTrue(response.headers['location'].endswith('error=provider_unavailable'))
+                self.assertTrue(parse_qs(urlsplit(response.headers['location']).query).get('error') == ['provider_unavailable'])
                 self.assertNotIn('PRIVATE', str(response.headers))
             with patch.object(auth.provider, 'authorization', new=AsyncMock(return_value='https://accounts.google.com/')), \
                     patch.object(auth.store, 'create_flow', side_effect=RuntimeError('PRIVATE')):
                 response = client.get('/auth/google/start', follow_redirects=False)
-                self.assertTrue(response.headers['location'].endswith('error=service_unavailable'))
+                self.assertTrue(parse_qs(urlsplit(response.headers['location']).query).get('error') == ['service_unavailable'])
             client.cookies.set('oi_session_dev', 'synthetic-session')
             with patch.object(auth.store, 'session', side_effect=RuntimeError('PRIVATE')):
                 response = client.get('/auth/me')

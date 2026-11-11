@@ -1,56 +1,90 @@
-# %%
-"""Check synthetic demo routes through an in-process API client.
-
-Environment flags and expiry time are controlled here. No browser, provider
-session or real candidate interview is exercised.
-"""
+"""Routing authorization checks with offline identity/repository stand-ins."""
 import os
 import unittest
 from unittest.mock import patch
-
 from fastapi.testclient import TestClient
 from backend.api import app
+from backend import auth, workspace
+from tests.test_google_auth import ENV
+from tests.workspace_fixture import MemoryAuth, MemoryWorkspace, USERS
 
-
-# %%
-class CandidateDemoTests(unittest.TestCase):
-    """Check demo lifecycle idempotency and local development access gates."""
+class WorkspaceTests(unittest.TestCase):
     def setUp(self):
-        """Enable demo mode temporarily and create a loopback-origin client."""
-        self.env = patch.dict(os.environ, {'APP_ENV': 'development', 'CANDIDATE_DEMO_ENABLED': 'true'})
-        self.env.start()
-        self.addCleanup(self.env.stop)
-        self.client = TestClient(app, base_url='http://127.0.0.1', client=('127.0.0.1', 1234))
-        self.headers = {'Origin': 'http://127.0.0.1:3000'}
+        self.repo = MemoryWorkspace()
+        for patcher in (patch.dict(os.environ, ENV, clear=True), patch.object(auth, 'store', MemoryAuth()), patch.object(workspace, 'store', self.repo)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.client = TestClient(app)
+        self.addCleanup(self.client.close)
 
-    def room(self):
-        """Create a synthetic frontend room through the demo route."""
-        return self.client.post('/demo/rooms', headers=self.headers, json={'role_id': 'frontend'})
+    def login(self, identity='candidate-a'):
+        self.client.cookies.set('oi_session_dev', identity)
+        return {'Origin': ENV['APP_ORIGIN'], 'X-CSRF-Token': auth.settings().digest('csrf', identity)}
 
-    def test_lifecycle(self):
-        """Require stable session creation and repeated end responses."""
-        self.assertEqual(self.client.get('/demo/roles', headers=self.headers).status_code, 200)
-        room = self.room().json()
-        path = '/demo/rooms/' + room['room_id']
-        self.assertEqual(self.client.get(path, headers=self.headers).status_code, 200)
-        session = self.client.post(path + '/sessions', headers=self.headers, json={'acknowledged': True}).json()
-        self.assertEqual(session, self.client.post(path + '/sessions', headers=self.headers, json={'acknowledged': True}).json())
-        path = '/demo/sessions/' + session['session_id']
-        self.assertEqual(self.client.get(path, headers=self.headers).json()['status'], 'active')
-        ended = self.client.post(path + '/end', headers=self.headers)
-        self.assertEqual(ended.json()['status'], 'ended')
-        self.assertEqual(ended.json(), self.client.post(path + '/end', headers=self.headers).json())
+    def test_auth_required_on_every_endpoint(self):
+        for path in ('/roles', '/rooms', '/rooms/room-one', '/sessions/session-one', '/hr', '/admin'):
+            self.assertEqual(self.client.get('/workspace'+path).status_code, 401, path)
+        for path in ('/rooms/room-one/sessions', '/sessions/session-one/end'):
+            self.assertEqual(self.client.post('/workspace'+path, json={'acknowledged': True}).status_code, 401)
+        self.client.cookies.set('oi_session_dev', 'forged-cookie')
+        self.assertEqual(self.client.get('/workspace/rooms').status_code, 401)
 
-    def test_validation_and_boundary(self):
-        """Reject invalid consent, origins, expired rooms and production access."""
-        room = self.room().json()
-        path = '/demo/rooms/' + room['room_id'] + '/sessions'
-        for body in ({'acknowledged': False}, {'acknowledged': 1}, {'acknowledged': True, 'consent': True}, []):
-            self.assertEqual(self.client.post(path, headers=self.headers, json=body).status_code, 422)
-        self.assertEqual(self.client.post('/demo/rooms', headers=self.headers, json={'role_id': 'private'}).status_code, 422)
-        self.assertEqual(self.client.get('/demo/sessions/unknown', headers=self.headers).status_code, 404)
-        self.assertEqual(self.client.get('/demo/roles', headers={'Origin': 'https://evil.example'}).status_code, 403)
-        with patch('backend.api.time.time', return_value=room['expires_at'] + 1):
-            self.assertEqual(self.client.post(path, headers=self.headers, json={'acknowledged': True}).status_code, 404)
-        with patch.dict(os.environ, {'APP_ENV': 'production'}):
-            self.assertEqual(self.client.get('/demo/roles', headers=self.headers).status_code, 404)
+    def test_identity_and_csrf_and_idempotency(self):
+        headers = self.login()
+        self.assertEqual(len(self.client.get('/workspace/rooms').json()), 1)
+        path='/workspace/rooms/room-one/sessions'
+        for h in ({}, {'Origin': 'https://evil.test', 'X-CSRF-Token': headers['X-CSRF-Token']}, {**headers, 'X-CSRF-Token': 'invalid'}):
+            self.assertEqual(self.client.post(path, headers=h, json={'acknowledged': True}).status_code, 403)
+        for value in ({'acknowledged': False}, {'acknowledged': 1}, {'acknowledged': True, 'candidate_id': USERS['candidate-a']['id']}, []):
+            self.assertEqual(self.client.post(path, headers=headers, json=value).status_code, 422)
+        first = self.client.post(path, headers=headers, json={'acknowledged': True}).json()
+        self.assertEqual(first, self.client.post(path, headers=headers, json={'acknowledged': True}).json())
+        self.assertEqual(self.client.get('/workspace/sessions/session-one').json(), first)
+        other = self.login('candidate-b')
+        self.assertEqual(self.client.get('/workspace/rooms').json(), [])
+        for target in ('/rooms/room-one','/rooms/unknown','/sessions/session-one'):
+            self.assertEqual(self.client.get('/workspace'+target).status_code,404)
+        self.assertEqual(self.client.post(path,headers=other,json={'acknowledged':True}).status_code,404)
+        self.assertEqual(self.client.post('/workspace/sessions/session-one/end',headers=other).status_code,404)
+        headers = self.login()
+        self.repo.assigned['room-one']['revoked_at'] = 'revoked'
+        self.assertEqual(self.client.get('/workspace/sessions/session-one').status_code,404)
+        ended = self.client.post('/workspace/sessions/session-one/end',headers=headers).json()
+        self.assertIsNotNone(ended['ended_at'])
+        self.assertEqual(ended,self.client.post('/workspace/sessions/session-one/end',headers=headers).json())
+
+    def test_schedule_grants_and_removed_capabilities(self):
+        headers=self.login()
+        self.repo.assigned['room-one']['ready']=False
+        self.assertEqual(self.client.post('/workspace/rooms/room-one/sessions',headers=headers,json={'acknowledged':True}).status_code,409)
+        for path in ('/hr','/admin'):
+            self.assertEqual(self.client.get('/workspace'+path).status_code,403)
+        self.login('hr')
+        self.assertEqual(self.client.get('/workspace/hr').status_code,200)
+        self.assertEqual(self.client.get('/workspace/admin').status_code,403)
+        USERS['hr']['grants'][0]['campaign_id']='another-campaign'
+        try: self.assertEqual(self.client.get('/workspace/hr').json()['rooms'],[])
+        finally: USERS['hr']['grants'][0]['campaign_id']='web'
+        self.login('admin')
+        self.assertEqual(self.client.get('/workspace/admin').status_code,200)
+        self.assertEqual(self.client.get('/workspace/hr').status_code,403)
+        self.assertEqual(self.client.get('/demo/roles').status_code,404)
+        self.assertEqual(self.client.post('/demo/rooms',json={'role_id':'frontend'}).status_code,404)
+        self.assertEqual(self.client.post('/workspace/rooms/room-one/sessions',content='x'*2049).status_code,413)
+        self.assertEqual(self.client.get('/workspace/admin').headers['cache-control'],'no-store')
+
+    def test_return_destinations_and_errors(self):
+        from unittest.mock import AsyncMock
+        for path in ('/rooms/room-one','/sessions/session-one/interview','/hr','/admin'):
+            self.assertEqual(auth.return_path(path),path)
+        for path in ('//evil.test','/rooms/%2fattack','/rooms/abc?x=1','/rooms/abc#x','/rooms/../admin','/rooms/abc\\admin','/rooms/abc\n','/sessions/abc','/login'):
+            self.assertEqual(auth.return_path(path),'/')
+        with patch.object(auth.provider,'authorization',new=AsyncMock(side_effect=RuntimeError('PRIVATE'))):
+            result=self.client.get('/auth/google/start?return_to=/rooms/room-one',follow_redirects=False)
+            self.assertIn('return_to=/rooms/room-one',result.headers['location'])
+            self.assertNotIn('PRIVATE',str(result.headers))
+        with patch.object(self.repo,'rooms',side_effect=RuntimeError('PRIVATE')):
+            self.login()
+            result=self.client.get('/workspace/rooms')
+            self.assertEqual(result.status_code,503)
+            self.assertNotIn('PRIVATE',result.text)

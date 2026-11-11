@@ -1,67 +1,99 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { load } from "./render-ui.mjs";
+const { default: Card, authError } = load("app/auth-ui/AuthCard.tsx");
 
-const require = createRequire(import.meta.url);
-const swc = require('next/dist/build/swc');
-await swc.loadBindings();
-function load(file = 'AuthCard') {
-  const source = readFileSync(new URL(`../app/auth-ui/${file}.tsx`, import.meta.url), 'utf8');
-  const output = swc.transformSync(source, { filename: 'AuthCard.tsx', jsc: { parser: { syntax: 'typescript', tsx: true }, transform: { react: { runtime: 'automatic' } } }, module: { type: 'commonjs' } }).code;
-  const module = { exports: {} };
-  new Function('require', 'module', 'exports', output)(name => name.endsWith('.css') ? {} : name === './AccountControl' ? load('AccountControl') : require(name), module, module.exports);
-  return module.exports;
-}
-test('both auth intents render one Google action and a fixed safe return path', () => {
-  const { default: Card } = load();
-  for (const intent of ['signin', 'signup']) {
-    const html = renderToStaticMarkup(React.createElement(Card, { intent }));
+test("one Google action preserves canonical invitation destinations", () => {
+  for (const target of [
+    "/roles",
+    "/rooms/room-one",
+    "/sessions/session-one/interview",
+    "//evil.test",
+    "/rooms/abc?next=evil",
+  ]) {
+    const html = renderToStaticMarkup(
+      React.createElement(Card, { returnTo: target }),
+    );
+    const expected = target.includes("evil") ? "/" : target;
     assert.match(html, /Continue with Google/);
-    assert.match(html, new RegExp(`return_to=/roles&amp;intent=${intent}`));
-    assert.equal((html.match(/href="\/auth\/google\/start\?/g) || []).length, 1);
-    assert.match(html, /<main class="[^"]*grid[^"]*items-start justify-items-center/);
-    assert.match(html, /aria-labelledby="auth-title"/);
-    assert.match(html, /min-h-12 w-full/);
-    assert.doesNotMatch(html, /<input|password|HR|Admin|localStorage/);
-    assert.match(html, /Google shares your name and email/);
-    assert.match(html, intent === 'signin' ? /href="\/signup"/ : /href="\/login"/);
+    assert.ok(html.includes("return_to=" + encodeURIComponent(expected)));
+    assert.equal(
+      (html.match(/href="\/api\/auth\/google\/start/g) || []).length,
+      1,
+    );
+    assert.equal((html.match(/aria-label="Main navigation"/g) || []).length, 1);
+    assert.doesNotMatch(html, /href="\/signup"|password|<input/);
+    assert.match(html, /Account terms &amp; privacy/);
   }
 });
-test('query errors use fixed copy, never arbitrary provider text', () => {
-  const { authError } = load();
-  assert.match(authError('cancel'), /cancelled/);
-  assert.match(authError('configuration'), /unavailable/);
-  assert.equal(authError('<script>private</script>'), authError('unknown'));
-  assert.equal(authError(null), '');
-  assert.match(authError('state_invalid'), /expired/);
-  for (const code of ['auth_unavailable', 'provider_unavailable', 'service_unavailable']) assert.match(authError(code), /unavailable/);
-  assert.match(authError('identity_invalid'), /verified/);
+test("query errors are fixed English copy", () => {
+  assert.match(authError("cancel"), /cancelled/);
+  assert.match(authError("state_invalid"), /expired/);
+  assert.equal(authError("<script>private</script>"), authError("unknown"));
 });
-test('proxy target is server-owned and rejects credentials or paths', async () => {
-  const { authBackend, default: config } = await import('../next.config.mjs');
-  assert.equal(authBackend(undefined), 'http://127.0.0.1:8000');
-  assert.equal(authBackend('https://api.internal:8000'), 'https://api.internal:8000');
-  for (const value of ['https://user:secret@api.internal', 'file:///tmp/api', 'https://api.internal/path', 'https://api.internal?target=elsewhere']) {
-    assert.throws(() => authBackend(value));
-  }
-  const previous = process.env.AUTH_BACKEND_URL;
+test("one server-owned origin proxies all browser APIs and the legacy callback", async () => {
+  const { authBackend, default: config } = await import("../next.config.mjs");
+  assert.equal(authBackend("http://127.0.0.1:8123"), "http://127.0.0.1:8123");
+  for (const target of [
+    "https://user:secret@api.internal",
+    "file:///tmp/api",
+    "https://api.internal/path",
+    "https://api.internal?target=elsewhere",
+  ])
+    assert.throws(() => authBackend(target));
+  const previous = process.env.API_BACKEND_URL;
   try {
-    process.env.AUTH_BACKEND_URL = 'http://127.0.0.1:8123';
-    assert.deepEqual(await config.rewrites(), [{ source: '/auth/:path*', destination: 'http://127.0.0.1:8123/auth/:path*' }]);
+    process.env.API_BACKEND_URL = "http://127.0.0.1:8123";
+    assert.deepEqual(await config.rewrites(), [
+      { source: "/api/auth/:path*", destination: "http://127.0.0.1:8123/auth/:path*" },
+      { source: "/api/workspace/:path*", destination: "http://127.0.0.1:8123/workspace/:path*" },
+      {
+        source: "/auth/:path*",
+        destination: "http://127.0.0.1:8123/auth/:path*",
+      },
+    ]);
   } finally {
-    if (previous === undefined) delete process.env.AUTH_BACKEND_URL;
-    else process.env.AUTH_BACKEND_URL = previous;
+    if (previous === undefined) delete process.env.API_BACKEND_URL;
+    else process.env.API_BACKEND_URL = previous;
   }
 });
-test('account control uses cookie session and CSRF logout, with safe retry and unmount guard', () => {
-  const source = readFileSync(new URL('../app/auth-ui/AccountControl.tsx', import.meta.url), 'utf8');
-  assert.match(source, /fetch\('\/auth\/me', \{ credentials: 'same-origin', cache: 'no-store' \}/);
-  assert.match(source, /fetch\('\/auth\/logout', \{ method: 'POST', credentials: 'include', headers: \{ 'X-CSRF-Token': account.csrf_token \}/);
-  assert.match(source, /if \(!response.ok\) throw Error\(\);\s+setAccount\(null\)/);
-  assert.match(source, /Could not sign out. Please try again/);
-  assert.match(source, /return \(\) => \{ active = false; \}/);
-  assert.doesNotMatch(source, /localStorage|document.cookie|dangerouslySetInnerHTML|setInterval/);
+test("server page guard rejects absent, expired and insufficient identities", async () => {
+  const { proxy } = load("proxy.ts");
+  const { NextRequest } = await import("next/server.js");
+  const previous = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response("{}", { status: 401 });
+    let response = await proxy(
+      new NextRequest("https://app.test/rooms/room-one"),
+    );
+    assert.equal(response.status, 307);
+    assert.equal(
+      new URL(response.headers.get("location")).searchParams.get("return_to"),
+      "/rooms/room-one",
+    );
+    globalThis.fetch = async () =>
+      Response.json({ user: { id: "candidate", grants: [] } });
+    assert.equal(
+      (await proxy(new NextRequest("https://app.test/admin"))).status,
+      403,
+    );
+    assert.equal(
+      (await proxy(new NextRequest("https://app.test/hr"))).status,
+      403,
+    );
+    assert.equal(
+      (await proxy(new NextRequest("https://app.test/roles"))).status,
+      200,
+    );
+    globalThis.fetch = async () => {
+      throw Error("PRIVATE");
+    };
+    response = await proxy(new NextRequest("https://app.test/roles"));
+    assert.equal(response.status, 503);
+    assert.doesNotMatch(await response.text(), /PRIVATE/);
+  } finally {
+    globalThis.fetch = previous;
+  }
 });

@@ -2,8 +2,9 @@
 
 Sign-up and sign-in use the same Google authorization-code flow. The identity
 key is `(https://accounts.google.com, sub)`, never email. All new accounts are
-`candidate`. This does not grant tenant, room, HR or operator access. `/roles`
-and `/demo/*` remain synthetic. `/v1/me` is not implemented by this feature.
+`candidate`. This does not grant tenant, room, HR or operator access. Account-bound
+preparation routes and confirmed grants are described in [web routing](../architecture/web-routing.md).
+`/v1/me` is not implemented; the old `/demo/*` capability API is removed.
 
 ## Local setup (run yourself, no provider call during tests)
 
@@ -61,10 +62,11 @@ only, plus existing DATABASE_* values; invoke migration/check in that container.
 
 ## Exact frontend interface
 
-Next/reverse proxy forwards `/auth/:path*` to backend; no new CORS policy.
-Browser navigates to `/auth/google/start?return_to=/roles&intent=signin` or
-`intent=signup`. Intent is copy only. Only literal `/` and `/roles` return paths
-are allowed; other values fall back to `/`. Unknown query values are not echoed.
+Next forwards browser `/api/*` calls to one server-owned backend origin, plus
+legacy `/auth/*` for registered callbacks. The sign-in action preserves canonical
+`/`, `/roles`, `/rooms/{id}`, `/sessions/{id}/interview`, `/hr` and `/admin`
+destinations. IDs are 3–80 ASCII letters/digits/underscore/hyphen; encodings,
+queries, fragments, backslashes and external origins fall back to `/`.
 
 * `GET /auth/google/start`: 303 Google redirect and 10-minute flow cookie, or
   303 fixed `APP_ORIGIN/login?error=<enum>` on provider/DB failure.
@@ -74,8 +76,8 @@ are allowed; other values fall back to `/`. Unknown query values are not echoed.
   fixed origin plus stored allowlisted path and a fresh session cookie. Old
   browser session row is invalidated in the same login transaction.
 * `GET /auth/me`: 200 `{ "user": { "id": "UUID", "email": "...",
-  "name": "optional or null", "role": "candidate" }, "csrf_token": "..." }`.
-  No picture, OAuth tokens or domain privileges. 401 `{"detail":"unauthenticated"}`.
+  "name": "optional or null", "role": "candidate", "grants": [] }, "csrf_token": "..." }`.
+  No picture or OAuth tokens. Confirmed non-revoked grants are loaded server-side. 401 `{"detail":"unauthenticated"}`.
 * `POST /auth/logout`: send credentials, exact `Origin: APP_ORIGIN`, and
   `X-CSRF-Token` from `/auth/me`. 204 after DB invalidation, then cookie deletion.
   Invalid/missing origin/token: 403 `{"detail":"csrf_invalid"}`. DB failure:
@@ -86,7 +88,7 @@ config) or `{"detail":"service_unavailable"}` (unexpected/DB error).
 Disabled config never redirects using an unvalidated origin.
 If configuration is invalid, Continue may display safe JSON 503 instead of a login
 page. Run the explicit configuration check before starting; no request Host is
-used as a fallback redirect. The compact navbar reads `/auth/me` once on mount
+used as a fallback redirect. The compact navbar reads `/api/auth/me` once on mount
 and signs out with the runtime CSRF value; failed logout can be retried.
 Callback/start redirect error enums: `access_denied`, `state_invalid`,
 `identity_invalid`, `provider_unavailable`, `service_unavailable`.

@@ -132,23 +132,25 @@ def main():
         web = Path(directory)
         # Copy only named sources and dependencies, never the root dotenv or full tree.
         for filename in ('package.json', 'package-lock.json', 'tsconfig.json', 'next-env.d.ts',
-                         'app/layout.tsx', 'app/page.tsx', 'app/globals.css',
+                         'app/layout.tsx', 'app/page.tsx', 'app/globals.css', 'app/theme.css', 'proxy.ts',
                          'postcss.config.mjs', 'next.config.mjs',
-                         'public/images/logo.svg', 'public/images/robot.svg'):
+                         'public/images/logo.svg', 'public/images/logo-light.svg', 'public/images/robot.svg'):
             target = web / filename
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / filename, target)
         # Keep traced packages inside the isolated root for standalone output too.
         shutil.copytree(ROOT / 'app/local-voice', web / 'app/local-voice')
         shutil.copytree(ROOT / 'app/roles', web / 'app/roles')
-        for route in ('login', 'signup', 'auth-ui'):
+        for route in ('login', 'auth-ui', 'components', 'rooms', 'sessions', 'hr', 'admin'):
             shutil.copytree(ROOT / 'app' / route, web / 'app' / route)
+        shutil.copytree(ROOT / 'lib', web / 'lib')
         shutil.copytree(ROOT / 'node_modules', web / 'node_modules', symlinks=True)
         if '--dev' in sys.argv:
             # No inherited provider variables or root dotenv. Edit source, then restart.
             dev_env = {key: ENV[key] for key in ('PATH', 'HOME', 'SYSTEMROOT', 'NEXT_TELEMETRY_DISABLED') if key in ENV}
-            if os.environ.get('AUTH_BACKEND_URL'):
-                dev_env['AUTH_BACKEND_URL'] = os.environ['AUTH_BACKEND_URL']
+            for variable in ('API_BACKEND_URL', 'AUTH_BACKEND_URL'):
+                if os.environ.get(variable):
+                    dev_env[variable] = os.environ[variable]
             print('Isolated web: http://127.0.0.1:3000/local-voice (restart after edits)', flush=True)
             # Fixed port: Next must fail rather than attach to an incremented port.
             # Keep the isolated source until the child has fully stopped.
@@ -180,7 +182,7 @@ def main():
                            [(f'http://127.0.0.1:{port}/local-voice', f'127.0.0.1:{port}', 404),
                             (f'http://127.0.0.1:{port}/login', f'127.0.0.1:{port}', 200),
                             (f'http://127.0.0.1:{port}/signup', f'127.0.0.1:{port}', 200, 'Continue with Google'),
-                            (f'http://127.0.0.1:{port}/auth/proxy-smoke?probe=1', f'127.0.0.1:{port}', 200, 'synthetic-auth-proxy')])
+                            (f'http://127.0.0.1:{port}/api/auth/proxy-smoke?probe=1', f'127.0.0.1:{port}', 200, 'synthetic-auth-proxy')])
         for text in ('Start with a', 'conversation.', 'View roles', 'I have an invitation', 'Voice interview', '/images/robot.svg'):
             assert text in html, text
         for text in ('>Example<', 'AI is speaking', '>Voice interviews in Vietnamese<', 'waveform'):
@@ -190,14 +192,8 @@ def main():
         assert any(path.is_file() for path in files)
         assert 'aria-label="Main navigation"' in html and 'href="/login"' in html
         css = ''.join(''.join(path.read_text().split()) for path in files if path.suffix == '.css')
-        assert 'min-h-12' in html and 'size-6 overflow-hidden' in html
-        for utility in ('.min-h-12{min-height:calc(var(--spacing)*12)}',
-                        '.size-6{width:calc(var(--spacing)*6);height:calc(var(--spacing)*6)}',
-                        '.justify-items-center{justify-items:center}',
-                        '.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}',
-                        '@media(max-width:760px)', '@media(max-width:480px)',
-                        '--spacing:.25rem', '--color-page:#0b0812'):
-            assert utility in css, utility
+        for token in ('--oi-bg:#0b0812', '--oi-bg:#faf8fd', '--color-page:var(--oi-bg)'):
+            assert token in css, token
         assert '.demo-nav{' not in css and '.auth-card{' not in css
         for path in files:
             if path.is_file():

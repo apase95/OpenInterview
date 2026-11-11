@@ -23,20 +23,22 @@ All website UI is in English. Interview speech is in Vietnamese.
 
 ## Current status
 
-This is an early scaffold with a connected, opt-in candidate demo at `/roles`,
-a FastAPI API, PostgreSQL, and an idle worker. The demo uses synthetic role
-labels and temporary rooms/sessions, not real interviews or authentication.
-Production authorization, interview media, and report jobs remain unimplemented.
-See [candidate demo setup](docs/contributing/development.md#candidate-demo-no-cloud-services).
+The web now has the seven specified page types, shared navigation, light/dark
+colors and URL-based room/session routes. Google-only `/login` preserves safe
+invitation return paths; `/signup` is a compatibility redirect. Assigned rooms and
+preparation sessions are stored in PostgreSQL and checked against the verified
+account on every API request. HR is scoped by confirmed campaign grants; Admin
+has no default content access.
 
-Google-only `/login` and `/signup` use the same-origin auth API. After private
-OAuth/PostgreSQL setup and an explicit auth migration, run `npm run test:auth`
-for the API and isolated frontend only (no voice worker).
-Run `.venv/bin/python -m backend.auth migrate --env-file .env` explicitly first,
-then `.venv/bin/python -m backend.auth check --env-file .env` to validate setup.
-See [auth quickstart](docs/contributing/development.md#google-sign-in-and-sign-up)
-and [Google auth setup](docs/contributing/google-auth.md). Real Google sign-in
-requires your credentials; offline checks do not prove a live OAuth flow.
+These are **preparation-only sessions**, without live interview audio or reports.
+HR/Admin pages expose authorized metadata; campaign authoring, invitation/grant
+mutations and report review still need the domain services. The old anonymous
+room-code demo is removed. See [routing, migration and limits](docs/architecture/web-routing.md).
+
+Before running, explicitly apply/check the additive auth migration with
+`python -m backend.auth migrate --env-file .env` and
+`python -m backend.auth check --env-file .env`. No real database migration or
+Google call is performed automatically. See [Google auth setup](docs/contributing/google-auth.md).
 
 An opt-in [local voice conversation test](docs/contributing/development.md#opt-in-local-voice-conversation-test)
 now provides restricted developer tokens and a named STT → LLM → TTS worker.
